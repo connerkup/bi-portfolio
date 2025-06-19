@@ -54,10 +54,10 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/packagingco/bi-portfolio"
-Repository = "https://github.com/packagingco/bi-portfolio"
-Documentation = "https://packagingco.github.io/bi-portfolio"
-Issues = "https://github.com/packagingco/bi-portfolio/issues"
+Homepage = "https://github.com/connerkup/bi-portfolio"
+Repository = "https://github.com/connerkup/bi-portfolio"
+Documentation = "https://github.com/connerkup/bi-portfolio"
+Issues = "https://github.com/connerkup/bi-portfolio/issues"
 
 [project.scripts]
 bi-portfolio = "packagingco_insights.cli:main"

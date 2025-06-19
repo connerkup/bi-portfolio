@@ -12,7 +12,7 @@ Get up and running with the PackagingCo BI Portfolio in minutes!
 
 ### 1. Clone and Navigate
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/connerkup/bi-portfolio
 cd bi-portfolio
 ```
 
