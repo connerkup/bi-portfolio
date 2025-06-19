@@ -16,6 +16,7 @@ This vertical slice implements the two primary modules in full, providing a comp
 - **Business storytelling emphasis**: Each analysis directly ties to real-world decision points
 - **Robust tooling**: Modern data stack with dbt, Streamlit, and DuckDB
 - **Professional structure**: Modular code, version control, testing, and documentation
+- **Interactive data exploration**: Comprehensive data browser with filtering, search, and export capabilities
 
 ## Core Modules (Vertical Slice Deliverables)
 
@@ -132,9 +133,12 @@ dbt docs serve  # View documentation locally
 
 ### Streamlit Dashboard
 The main dashboard provides:
-- **ESG Overview**: Sustainability metrics and impact analysis
-- **Financial Overview**: Sales forecasts and financial KPIs
-- **Combined Insights**: Integrated ESG-finance scenario analysis
+- **Overview**: Executive summary with key ESG and financial KPIs
+- **ESG Insights**: Sustainability metrics and impact analysis with interactive visualizations
+- **Financial Analysis**: Sales forecasts and financial KPIs with trend analysis
+- **Forecasting**: Advanced sales forecasting with scenario modeling
+- **Combined Insights**: Integrated ESG-finance scenario analysis and trade-off exploration
+- **Data Browser**: Interactive data exploration with filtering, search, pagination, and export capabilities for both processed and raw datasets
 
 ### Airflow DAG
 The included DAG script (`airflow/dag_bi_portfolio.py`) demonstrates how to orchestrate the pipeline in production. While not deployed in this project, it shows the workflow:

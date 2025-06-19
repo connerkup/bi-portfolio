@@ -28,15 +28,24 @@ def create_kpi_card(title: str,
     if format_type == "currency":
         formatted_value = f"${value:,.0f}"
         if delta is not None:
-            formatted_delta = f"${delta:+,.0f}"
+            try:
+                formatted_delta = f"${float(delta):+,.0f}"
+            except (ValueError, TypeError):
+                formatted_delta = str(delta)
     elif format_type == "percentage":
         formatted_value = f"{value:.1f}%"
         if delta is not None:
-            formatted_delta = f"{delta:+.1f}%"
+            try:
+                formatted_delta = f"{float(delta):+.1f}%"
+            except (ValueError, TypeError):
+                formatted_delta = str(delta)
     else:
         formatted_value = f"{value:,.0f}"
         if delta is not None:
-            formatted_delta = f"{delta:+,.0f}"
+            try:
+                formatted_delta = f"{float(delta):+,.0f}"
+            except (ValueError, TypeError):
+                formatted_delta = str(delta)
 
     # Custom HTML for KPI card (no leading newline or indentation)
     card_html = f"""<div class=\"metric-card\">

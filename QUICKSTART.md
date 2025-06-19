@@ -66,12 +66,15 @@ streamlit run streamlit_app/app.py
 - **Financial Analysis**: Revenue, profit, and growth metrics
 - **Forecasting**: Sales projections and trend analysis
 - **Combined Insights**: ESG-Finance integration
+- **Data Browser**: Interactive data exploration with filtering, search, and export capabilities
 
 ### 📈 Key Features
 - Interactive visualizations with Plotly
 - Real-time data filtering
 - Business insights and recommendations
 - Scenario analysis capabilities
+- Comprehensive data browser with search and export
+- Data quality insights and statistics
 
 ## Exploring the Code
 
@@ -95,6 +98,7 @@ bi-portfolio/
 - **Finance Analyzer**: Financial performance analysis
 - **Sales Forecaster**: Revenue projections
 - **Data Loader**: Database connectivity utilities
+- **Data Browser**: Interactive data exploration and export tools
 
 ## Next Steps
 
