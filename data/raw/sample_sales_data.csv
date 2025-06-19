@@ -1,0 +1,37 @@
+date,product_line,region,customer_segment,units_sold,revenue,cost_of_goods,operating_cost,profit_margin
+2023-01-01,Plastic Containers,North America,Retail,15000,75000,45000,15000,15000
+2023-01-01,Paper Packaging,North America,Retail,12000,60000,36000,12000,12000
+2023-01-01,Glass Bottles,North America,Retail,8000,64000,48000,12800,3200
+2023-01-01,Plastic Containers,Europe,Wholesale,20000,100000,60000,20000,20000
+2023-01-01,Paper Packaging,Europe,Wholesale,18000,90000,54000,18000,18000
+2023-01-01,Glass Bottles,Europe,Wholesale,10000,80000,60000,16000,4000
+2023-02-01,Plastic Containers,North America,Retail,16000,80000,48000,16000,16000
+2023-02-01,Paper Packaging,North America,Retail,13000,65000,39000,13000,13000
+2023-02-01,Glass Bottles,North America,Retail,8500,68000,51000,13600,3400
+2023-02-01,Plastic Containers,Europe,Wholesale,21000,105000,63000,21000,21000
+2023-02-01,Paper Packaging,Europe,Wholesale,19000,95000,57000,19000,19000
+2023-02-01,Glass Bottles,Europe,Wholesale,11000,88000,66000,17600,4400
+2023-03-01,Plastic Containers,North America,Retail,17000,85000,51000,17000,17000
+2023-03-01,Paper Packaging,North America,Retail,14000,70000,42000,14000,14000
+2023-03-01,Glass Bottles,North America,Retail,9000,72000,54000,14400,3600
+2023-03-01,Plastic Containers,Europe,Wholesale,22000,110000,66000,22000,22000
+2023-03-01,Paper Packaging,Europe,Wholesale,20000,100000,60000,20000,20000
+2023-03-01,Glass Bottles,Europe,Wholesale,12000,96000,72000,19200,4800
+2023-04-01,Plastic Containers,North America,Retail,18000,90000,54000,18000,18000
+2023-04-01,Paper Packaging,North America,Retail,15000,75000,45000,15000,15000
+2023-04-01,Glass Bottles,North America,Retail,9500,76000,57000,15200,3800
+2023-04-01,Plastic Containers,Europe,Wholesale,23000,115000,69000,23000,23000
+2023-04-01,Paper Packaging,Europe,Wholesale,21000,105000,63000,21000,21000
+2023-04-01,Glass Bottles,Europe,Wholesale,13000,104000,78000,20800,5200
+2023-05-01,Plastic Containers,North America,Retail,19000,95000,57000,19000,19000
+2023-05-01,Paper Packaging,North America,Retail,16000,80000,48000,16000,16000
+2023-05-01,Glass Bottles,North America,Retail,10000,80000,60000,16000,4000
+2023-05-01,Plastic Containers,Europe,Wholesale,24000,120000,72000,24000,24000
+2023-05-01,Paper Packaging,Europe,Wholesale,22000,110000,66000,22000,22000
+2023-05-01,Glass Bottles,Europe,Wholesale,14000,112000,84000,22400,5600
+2023-06-01,Plastic Containers,North America,Retail,20000,100000,60000,20000,20000
+2023-06-01,Paper Packaging,North America,Retail,17000,85000,51000,17000,17000
+2023-06-01,Glass Bottles,North America,Retail,10500,84000,63000,16800,4200
+2023-06-01,Plastic Containers,Europe,Wholesale,25000,125000,75000,25000,25000
+2023-06-01,Paper Packaging,Europe,Wholesale,23000,115000,69000,23000,23000
+2023-06-01,Glass Bottles,Europe,Wholesale,15000,120000,90000,24000,6000 

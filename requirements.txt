@@ -1,0 +1,49 @@
+# Core data science libraries
+pandas>=1.5.0
+numpy>=1.21.0
+scipy>=1.9.0
+
+# Visualization
+streamlit>=1.28.0
+plotly>=5.15.0
+altair>=5.0.0
+matplotlib>=3.6.0
+seaborn>=0.12.0
+
+# Database and data processing
+duckdb>=0.8.0
+dbt-duckdb>=1.4.0
+sqlalchemy>=1.4.0
+
+# Jupyter and notebooks
+jupyter>=1.0.0
+ipykernel>=6.20.0
+nbformat>=5.7.0
+
+# Machine learning and forecasting
+scikit-learn>=1.1.0
+prophet>=1.1.0
+statsmodels>=0.13.0
+
+# Utilities
+python-dotenv>=0.19.0
+pyyaml>=6.0
+click>=8.1.0
+
+# Development and testing
+pytest>=7.0.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=0.991
+
+# Documentation
+mkdocs>=1.4.0
+mkdocs-material>=8.5.0
+
+# Airflow (for DAG script)
+apache-airflow>=2.5.0
+
+# Additional utilities
+requests>=2.28.0
+openpyxl>=3.0.0
+xlrd>=2.0.0 
