@@ -133,8 +133,8 @@ def create_sample_esg_data() -> pd.DataFrame:
         esg_data['date'] = pd.to_datetime(esg_data['date'])
         esg_data['month'] = esg_data['date'].dt.to_period('M')
         
-        # Group by month and aggregate
-        monthly_esg = esg_data.groupby('month').agg({
+        # Group by month and product line, then aggregate
+        monthly_esg = esg_data.groupby(['month', 'product_line']).agg({
             'total_emissions_kg_co2': 'sum',
             'recycled_material_pct': 'mean',
             'energy_efficiency_rating': 'mean',
@@ -143,10 +143,12 @@ def create_sample_esg_data() -> pd.DataFrame:
         }).reset_index()
         
         # Rename columns to match dbt model
-        monthly_esg.columns = [
-            'month', 'total_emissions_kg_co2', 'avg_recycled_material_pct',
-            'avg_efficiency_rating', 'avg_quality_score', 'avg_waste_reduction_pct'
-        ]
+        monthly_esg.rename(columns={
+            'recycled_material_pct': 'avg_recycled_material_pct',
+            'energy_efficiency_rating': 'avg_efficiency_rating',
+            'quality_score': 'avg_quality_score',
+            'waste_reduction_pct': 'avg_waste_reduction_pct'
+        }, inplace=True)
         
         # Convert month back to datetime
         monthly_esg['date'] = monthly_esg['month'].dt.to_timestamp()
@@ -156,6 +158,7 @@ def create_sample_esg_data() -> pd.DataFrame:
         # Return minimal sample data if processing fails
         return pd.DataFrame({
             'month': pd.date_range('2023-01-01', periods=12, freq='M'),
+            'product_line': ['Product A'] * 12,
             'total_emissions_kg_co2': [1000 + i*100 for i in range(12)],
             'avg_recycled_material_pct': [75 + i*2 for i in range(12)],
             'avg_efficiency_rating': [8.0 + i*0.1 for i in range(12)],
@@ -186,8 +189,8 @@ def create_sample_finance_data() -> pd.DataFrame:
         sales_data['total_profit'] = sales_data['total_revenue'] - sales_data['total_cost']
         sales_data['total_profit_margin'] = (sales_data['total_profit'] / sales_data['total_revenue']) * 100
         
-        # Group by month and aggregate
-        monthly_finance = sales_data.groupby('month').agg({
+        # Group by month and product line, then aggregate
+        monthly_finance = sales_data.groupby(['month', 'product_line']).agg({
             'total_revenue': 'sum',
             'total_cost': 'sum',
             'total_profit': 'sum',
@@ -195,11 +198,8 @@ def create_sample_finance_data() -> pd.DataFrame:
             'quantity': 'sum'
         }).reset_index()
         
-        # Rename columns to match dbt model
-        monthly_finance.columns = [
-            'month', 'total_revenue', 'total_cost', 'total_profit',
-            'total_profit_margin', 'total_quantity'
-        ]
+        # Rename column to match dbt model
+        monthly_finance.rename(columns={'quantity': 'total_quantity'}, inplace=True)
         
         # Convert month back to datetime
         monthly_finance['date'] = monthly_finance['month'].dt.to_timestamp()
@@ -209,6 +209,7 @@ def create_sample_finance_data() -> pd.DataFrame:
         # Return minimal sample data if processing fails
         return pd.DataFrame({
             'month': pd.date_range('2023-01-01', periods=12, freq='M'),
+            'product_line': ['Product A'] * 12,
             'total_revenue': [100000 + i*10000 for i in range(12)],
             'total_cost': [70000 + i*7000 for i in range(12)],
             'total_profit': [30000 + i*3000 for i in range(12)],
