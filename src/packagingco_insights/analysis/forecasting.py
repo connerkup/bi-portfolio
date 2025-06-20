@@ -7,10 +7,17 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
+
+# Optional scikit-learn imports
+try:
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import mean_absolute_error, mean_squared_error
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    warnings.warn("Scikit-learn not available. Some forecasting features will be limited.")
 
 # Advanced time-series forecasting imports
 try:
@@ -29,6 +36,8 @@ except ImportError:
     STATSMODELS_AVAILABLE = False
     warnings.warn("Statsmodels not available. Install with: pip install statsmodels")
 
+# Remove pmdarima dependency since it's causing build issues
+PMDARIMA_AVAILABLE = False
 
 class SalesForecaster:
     """
@@ -461,16 +470,14 @@ class SalesForecaster:
                            max_q: int = 3,
                            seasonal: bool = True) -> pd.DataFrame:
         """
-        Generate forecasts using auto-ARIMA with automatic parameter selection.
-        
-        This method automatically finds the best ARIMA parameters using AIC/BIC criteria.
+        Generate auto-ARIMA forecast with automatic parameter selection.
         
         Args:
             periods: Number of periods to forecast
             group_by: Column to group by for forecasting
-            max_p: Maximum autoregressive order
+            max_p: Maximum AR order
             max_d: Maximum differencing order
-            max_q: Maximum moving average order
+            max_q: Maximum MA order
             seasonal: Whether to include seasonal components
         
         Returns:
@@ -479,79 +486,9 @@ class SalesForecaster:
         if not STATSMODELS_AVAILABLE:
             raise ImportError("Statsmodels is not available. Install with: pip install statsmodels")
         
-        try:
-            from pmdarima import auto_arima
-            PMDARIMA_AVAILABLE = True
-        except ImportError:
-            PMDARIMA_AVAILABLE = False
-            warnings.warn("pmdarima not available for auto-ARIMA. Install with: pip install pmdarima")
-            return pd.DataFrame()
-        
-        forecasts = []
-        
-        for group in self.prepared_data[group_by].unique():
-            group_data = self.prepared_data[self.prepared_data[group_by] == group].copy()
-            
-            # Need at least 6 months of data for auto-ARIMA
-            if len(group_data) < 6:
-                warnings.warn(f"Skipping auto-ARIMA forecast for {group} due to insufficient data (< 6 months).")
-                continue
-            
-            # Sort data to ensure correct time index
-            group_data = group_data.sort_values('date').reset_index(drop=True)
-            
-            # Prepare time series data
-            revenue_series = group_data['revenue'].values
-            
-            # Remove any NaN values
-            revenue_series = revenue_series[~np.isnan(revenue_series)]
-            
-            if len(revenue_series) < 6:
-                warnings.warn(f"Skipping auto-ARIMA forecast for {group} due to insufficient valid data.")
-                continue
-            
-            try:
-                # Find best ARIMA parameters automatically
-                auto_model = auto_arima(
-                    revenue_series,
-                    max_p=max_p,
-                    max_d=max_d,
-                    max_q=max_q,
-                    seasonal=seasonal,
-                    stepwise=True,
-                    suppress_warnings=True,
-                    error_action='ignore',
-                    trace=False
-                )
-                
-                # Generate forecasts
-                forecast_result = auto_model.predict(n_periods=periods)
-                
-                # Generate future dates
-                last_date = group_data['date'].max()
-                future_dates = pd.date_range(
-                    start=last_date + pd.DateOffset(months=1),
-                    periods=periods,
-                    freq='MS'
-                )
-                
-                # Extract forecast values
-                for i, (date, forecast_value) in enumerate(zip(future_dates, forecast_result)):
-                    forecasts.append({
-                        'date': date,
-                        group_by: group,
-                        'forecasted_revenue': max(0, forecast_value),  # Ensure non-negative
-                        'forecast_period': i + 1,
-                        'model_type': 'auto_arima',
-                        'best_order': str(auto_model.order),
-                        'aic': auto_model.aic()
-                    })
-                    
-            except Exception as e:
-                warnings.warn(f"Auto-ARIMA forecast failed for {group}: {str(e)}")
-                continue
-        
-        return pd.DataFrame(forecasts)
+        # Since pmdarima is not available, return empty DataFrame with warning
+        warnings.warn("Auto-ARIMA forecasting is not available due to missing pmdarima dependency. Use manual ARIMA forecasting instead.")
+        return pd.DataFrame()
     
     def trend_analysis(self, 
                       metric: str = 'revenue',
@@ -873,9 +810,15 @@ class SalesForecaster:
                             ]['forecasted_revenue'].values[:len(actual_values)]
                             
                             if len(forecast_values) > 0 and len(actual_values) > 0:
-                                # Calculate metrics
-                                mae = mean_absolute_error(actual_values, forecast_values)
-                                mse = mean_squared_error(actual_values, forecast_values)
+                                # Calculate metrics using numpy if sklearn is not available
+                                if SKLEARN_AVAILABLE:
+                                    mae = mean_absolute_error(actual_values, forecast_values)
+                                    mse = mean_squared_error(actual_values, forecast_values)
+                                else:
+                                    # Manual calculation using numpy
+                                    mae = np.mean(np.abs(actual_values - forecast_values))
+                                    mse = np.mean((actual_values - forecast_values) ** 2)
+                                
                                 rmse = np.sqrt(mse)
                                 
                                 # Calculate MAPE (Mean Absolute Percentage Error)
