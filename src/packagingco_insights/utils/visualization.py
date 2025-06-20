@@ -6,6 +6,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from typing import Optional, Dict, Any, List, Literal
 import pandas as pd
+from plotly.subplots import make_subplots
 
 
 def _format_value(value: float, format_type: str) -> str:
@@ -26,7 +27,7 @@ def create_kpi_card(
     delta_color: Literal["normal", "inverse", "off"] = "normal"
 ):
     """
-    Create a KPI card using st.metric.
+    Create a simple KPI card using Streamlit's native metric component.
     
     Args:
         title: Title of the KPI.
@@ -38,15 +39,11 @@ def create_kpi_card(
     """
     formatted_value = _format_value(value, format_type)
     
-    formatted_delta = None
-    if delta is not None:
-        formatted_delta = _format_value(abs(delta), format_type)
-
+    # Use Streamlit's native metric component
     st.metric(
-        label=title, 
-        value=formatted_value, 
-        delta=formatted_delta,
-        delta_color=delta_color,
+        label=title,
+        value=formatted_value,
+        delta=delta,
         help=help_text
     )
 
@@ -348,4 +345,195 @@ def display_charts_responsive(charts_data: List[go.Figure], titles: Optional[Lis
         with cols[i]:
             if titles and i < len(titles):
                 st.subheader(titles[i])
-            st.plotly_chart(chart, use_container_width=True) 
+            st.plotly_chart(chart, use_container_width=True)
+
+
+def create_responsive_kpi_grid(kpis: List[Dict[str, Any]]):
+    """
+    Create a responsive grid of KPI cards.
+    
+    Args:
+        kpis: List of dictionaries containing KPI data
+    """
+    # Calculate number of columns based on screen size
+    num_kpis = len(kpis)
+    if num_kpis <= 2:
+        cols = st.columns(num_kpis)
+    elif num_kpis <= 4:
+        cols = st.columns(2)
+    else:
+        cols = st.columns(3)
+    
+    for i, kpi in enumerate(kpis):
+        col_idx = i % len(cols)
+        with cols[col_idx]:
+            create_kpi_card(
+                title=kpi['title'],
+                value=kpi['value'],
+                delta=kpi.get('delta'),
+                format_type=kpi.get('format_type', 'number'),
+                help_text=kpi.get('help_text'),
+                delta_color=kpi.get('delta_color', 'normal')
+            )
+
+
+def plot_esg_trends(data: pd.DataFrame) -> go.Figure:
+    """
+    Create ESG trends visualization.
+    
+    Args:
+        data: DataFrame containing ESG data with columns like date, total_emissions_kg_co2, etc.
+    
+    Returns:
+        Plotly figure object
+    """
+    # Ensure date column is datetime
+    df = data.copy()
+    df['date'] = pd.to_datetime(df['date'])
+    
+    # Group by date and calculate metrics
+    trends = df.groupby(df['date'].dt.to_period('M')).agg({
+        'total_emissions_kg_co2': 'sum',
+        'total_energy_consumption_kwh': 'sum',
+        'avg_recycled_material_pct': 'mean',
+        'total_waste_generated_kg': 'sum'
+    }).reset_index()
+    
+    trends['date'] = trends['date'].astype(str)
+    
+    # Create subplots
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=(
+            'CO2 Emissions Over Time',
+            'Energy Consumption Over Time',
+            'Recycled Material % Over Time',
+            'Waste Generated Over Time'
+        ),
+        specs=[[{"secondary_y": False}, {"secondary_y": False}],
+               [{"secondary_y": False}, {"secondary_y": False}]]
+    )
+    
+    # CO2 Emissions
+    fig.add_trace(
+        go.Scatter(
+            x=trends['date'],
+            y=trends['total_emissions_kg_co2'],
+            mode='lines+markers',
+            name='CO2 Emissions',
+            line=dict(color='red', width=2),
+            marker=dict(size=6)
+        ),
+        row=1, col=1
+    )
+    
+    # Energy Consumption
+    fig.add_trace(
+        go.Scatter(
+            x=trends['date'],
+            y=trends['total_energy_consumption_kwh'],
+            mode='lines+markers',
+            name='Energy Consumption',
+            line=dict(color='orange', width=2),
+            marker=dict(size=6)
+        ),
+        row=1, col=2
+    )
+    
+    # Recycled Material %
+    fig.add_trace(
+        go.Scatter(
+            x=trends['date'],
+            y=trends['avg_recycled_material_pct'],
+            mode='lines+markers',
+            name='Recycled Material %',
+            line=dict(color='green', width=2),
+            marker=dict(size=6)
+        ),
+        row=2, col=1
+    )
+    
+    # Waste Generated
+    fig.add_trace(
+        go.Scatter(
+            x=trends['date'],
+            y=trends['total_waste_generated_kg'],
+            mode='lines+markers',
+            name='Waste Generated',
+            line=dict(color='brown', width=2),
+            marker=dict(size=6)
+        ),
+        row=2, col=2
+    )
+    
+    fig.update_layout(
+        title='ESG Performance Trends Over Time',
+        height=600,
+        showlegend=False,
+        hovermode='x unified'
+    )
+    
+    # Update axes labels
+    fig.update_xaxes(title_text="Time Period", row=1, col=1)
+    fig.update_xaxes(title_text="Time Period", row=1, col=2)
+    fig.update_xaxes(title_text="Time Period", row=2, col=1)
+    fig.update_xaxes(title_text="Time Period", row=2, col=2)
+    
+    fig.update_yaxes(title_text="CO2 Emissions (kg)", row=1, col=1)
+    fig.update_yaxes(title_text="Energy (kWh)", row=1, col=2)
+    fig.update_yaxes(title_text="Recycled Material (%)", row=2, col=1)
+    fig.update_yaxes(title_text="Waste (kg)", row=2, col=2)
+    
+    return fig
+
+
+def plot_material_composition(data: pd.DataFrame) -> go.Figure:
+    """
+    Create material composition visualization.
+    
+    Args:
+        data: DataFrame containing material data
+    
+    Returns:
+        Plotly figure object
+    """
+    # Calculate material composition by product line
+    material_comp = data.groupby('product_line').agg({
+        'avg_recycled_material_pct': 'mean',
+        'avg_virgin_material_pct': 'mean',
+        'avg_recycling_rate_pct': 'mean'
+    }).reset_index()
+    
+    # Create stacked bar chart
+    fig = go.Figure()
+    
+    # Add recycled material
+    fig.add_trace(go.Bar(
+        name='Recycled Material',
+        x=material_comp['product_line'],
+        y=material_comp['avg_recycled_material_pct'],
+        marker_color='green',
+        text=material_comp['avg_recycled_material_pct'].round(1).astype(str) + '%',
+        textposition='inside'
+    ))
+    
+    # Add virgin material
+    fig.add_trace(go.Bar(
+        name='Virgin Material',
+        x=material_comp['product_line'],
+        y=material_comp['avg_virgin_material_pct'],
+        marker_color='red',
+        text=material_comp['avg_virgin_material_pct'].round(1).astype(str) + '%',
+        textposition='inside'
+    ))
+    
+    fig.update_layout(
+        title='Material Composition by Product Line',
+        barmode='stack',
+        xaxis_title='Product Line',
+        yaxis_title='Percentage (%)',
+        height=400,
+        showlegend=True
+    )
+    
+    return fig 

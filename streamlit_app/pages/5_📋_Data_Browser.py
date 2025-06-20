@@ -11,147 +11,146 @@ import sys
 import os
 import io
 
+# Add the project root to the path to allow importing from 'streamlit_app'
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-def main():
-    """Data Browser page main function."""
-    
-    # Check if data is available in session state
-    if 'filtered_esg' not in st.session_state or 'filtered_finance' not in st.session_state or 'filtered_sales' not in st.session_state:
-        st.error("No data available. Please return to the main page to load data.")
-        st.info("The main page loads and filters the data for all pages.")
-        return
-    
+# Import shared controls
+from components.shared_controls import setup_sidebar_controls
+
+# Setup sidebar controls
+setup_sidebar_controls()
+
+# Check for data availability
+if 'filtered_esg' not in st.session_state or 'filtered_finance' not in st.session_state or 'filtered_sales' not in st.session_state:
+    st.warning("Data is being filtered, please wait...")
+    st.info("Please return to the main page to load and filter data.")
+else:
+    # Page content
     esg_data = st.session_state.filtered_esg
     finance_data = st.session_state.filtered_finance
     sales_data = st.session_state.filtered_sales
-    raw_esg_data = st.session_state.get('raw_esg_data', None)
-    raw_sales_data = st.session_state.get('raw_sales_data', None)
     
-    st.markdown("## 📋 Data Browser")
-    st.markdown("Explore the underlying data used in the dashboard with filtering and sorting capabilities.")
-    
-    datasets = {
-        "🌱 ESG Data (Processed)": esg_data,
-        "💰 Financial Data (Processed)": finance_data,
-        "📈 Sales Data (Processed)": sales_data,
-    }
-    
-    # Add raw data if available
-    if raw_esg_data is not None:
-        datasets["📄 Raw ESG Data"] = raw_esg_data
-    if raw_sales_data is not None:
-        datasets["📄 Raw Sales Data"] = raw_sales_data
-    
-    selected_dataset = st.selectbox("Select Dataset to Browse", list(datasets.keys()))
-    df = datasets[selected_dataset]
-    
-    if df is not None and not df.empty:
-        st.markdown(f"### {selected_dataset}")
+    if esg_data.empty and finance_data.empty and sales_data.empty:
+        st.warning("No data available for the selected filters.")
+        st.info("Please adjust the filters in the sidebar.")
+    else:
+        # Data browser content
+        st.markdown("## 📋 Data Browser")
+        st.markdown("Explore the underlying data used in the dashboard with filtering and sorting capabilities.")
+
+        # Dataset selection
+        datasets = {
+            "ESG Data": esg_data if not esg_data.empty else None,
+            "Financial Data": finance_data if not finance_data.empty else None,
+            "Sales Data": sales_data if not sales_data.empty else None
+        }
         
-        st.subheader("📊 Dataset Information")
-        st.metric("Total Rows", len(df))
-        st.metric("Total Columns", len(df.columns))
-        missing_pct = (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100
-        st.metric("Missing Data %", f"{missing_pct:.1f}%")
-        st.metric("Memory Usage", f"{df.memory_usage(deep=True).sum() / 1024:.1f} KB")
+        # Filter out empty datasets
+        available_datasets = {k: v for k, v in datasets.items() if v is not None}
         
-        st.markdown("#### Data Overview")
-        tab1, tab2, tab3 = st.tabs(["📊 Sample Data", "📈 Statistics", "🔍 Data Info"])
-        
-        with tab1:
+        if not available_datasets:
+            st.warning("No datasets available for the selected filters.")
+        else:
+            selected_dataset = st.selectbox("Select Dataset", list(available_datasets.keys()))
+            current_data = available_datasets[selected_dataset]
+            
+            st.markdown(f"### {selected_dataset}")
+            
+            # Basic data info
+            st.markdown("#### Data Overview")
+            st.write(f"**Shape:** {current_data.shape[0]} rows × {current_data.shape[1]} columns")
+            st.write(f"**Date Range:** {current_data['date'].min().strftime('%Y-%m-%d')} to {current_data['date'].max().strftime('%Y-%m-%d')}")
+            
             st.markdown("**First 10 rows of data:**")
-            st.dataframe(df.head(10), use_container_width=True)
-        
-        with tab2:
-            st.markdown("**Numeric Column Statistics:**")
-            numeric_cols = df.select_dtypes(include=['number']).columns
+            st.dataframe(current_data.head(10), use_container_width=True)
+            
+            # Numeric statistics
+            numeric_cols = current_data.select_dtypes(include=['number']).columns
             if len(numeric_cols) > 0:
-                st.dataframe(df[numeric_cols].describe(), use_container_width=True)
-            else:
-                st.info("No numeric columns found in this dataset.")
-        
-        with tab3:
+                st.markdown("**Numeric Column Statistics:**")
+                st.dataframe(current_data[numeric_cols].describe(), use_container_width=True)
+            
+            # Dataset info
             st.markdown("**Dataset Information:**")
-            buffer = io.StringIO()
-            df.info(buf=buffer, max_cols=None, memory_usage=True, show_counts=True)
-            st.text(buffer.getvalue())
-        
-        st.markdown("#### Column Selection")
-        selected_columns = st.multiselect(
-            "Select columns to display", 
-            df.columns.tolist(), 
-            default=df.columns.tolist()[:min(8, len(df.columns))]
-        )
-        
-        if selected_columns:
-            display_df = df[selected_columns].copy()
+            st.dataframe(current_data.info(), use_container_width=True)
             
-            st.markdown("#### Search & Filter")
-            search_term = st.text_input("Search across all columns (case-insensitive)", placeholder="Enter search term...")
-            if search_term:
-                mask = display_df.astype(str).apply(lambda x: x.str.contains(search_term, case=False, na=False)).any(axis=1)
-                display_df = display_df[mask]
-                st.info(f"Found {len(display_df)} rows matching '{search_term}'")
-            
-            st.markdown("#### Column Filters")
-            for col in selected_columns:
-                if display_df[col].dtype in ['object', 'string']:
-                    unique_vals = display_df[col].dropna().unique()
-                    if len(unique_vals) <= 20:
-                        selected_vals = st.multiselect(f"Filter {col}", options=sorted(unique_vals), default=sorted(unique_vals))
-                        if selected_vals:
-                            display_df = display_df[display_df[col].isin(selected_vals)]
-                elif display_df[col].dtype in ['int64', 'float64']:
-                    min_val = display_df[col].min()
-                    max_val = display_df[col].max()
-                    if pd.notna(min_val) and pd.notna(max_val):
-                        # Check if min and max are different to avoid slider error
-                        if min_val < max_val:
-                            range_vals = st.slider(f"Range {col}", min_value=float(min_val), max_value=float(max_val), value=(float(min_val), float(max_val)))
-                            display_df = display_df[(display_df[col] >= range_vals[0]) & (display_df[col] <= range_vals[1])]
-                        else:
-                            # If all values are the same, show the value and skip filtering
-                            st.info(f"Column '{col}' has only one value: {min_val}")
-            
-            st.markdown("#### Pagination")
-            rows_per_page = st.selectbox("Rows per page", [10, 25, 50, 100, 500])
-            total_pages = (len(display_df) + rows_per_page - 1) // rows_per_page
-            current_page = st.selectbox("Page", range(1, total_pages + 1), index=0)
-            start_idx = (current_page - 1) * rows_per_page
-            end_idx = start_idx + rows_per_page
-            
-            st.markdown("#### Data Table")
-            st.markdown(f"Showing rows {start_idx + 1}-{min(end_idx, len(display_df))} of {len(display_df)} total rows")
-            st.dataframe(display_df.iloc[start_idx:end_idx], use_container_width=True, height=400)
-            
-            st.markdown("#### Export Data")
-            csv_data = display_df.to_csv(index=False)
-            st.download_button(
-                label="Download filtered data as CSV", 
-                data=csv_data, 
-                file_name=f"{selected_dataset.replace(' ', '_').lower()}_filtered.csv", 
-                mime="text/csv"
+            # Column selection
+            st.markdown("#### Column Selection")
+            selected_columns = st.multiselect(
+                "Select columns to display",
+                current_data.columns.tolist(),
+                default=current_data.columns.tolist()
             )
             
-            st.markdown("#### Data Quality Insights")
-            st.markdown("**Missing Values by Column:**")
-            missing_data = display_df.isnull().sum()
-            missing_data = missing_data[missing_data > 0]
-            if not missing_data.empty:
-                st.write(missing_data)
-            else:
-                st.write("No missing values found!")
-            
-            st.markdown("**Data Types:**")
-            dtype_info = display_df.dtypes.value_counts()
-            st.write(dtype_info)
-        else:
-            st.warning("Please select at least one column to display.")
-    else:
-        st.error(f"No data available for {selected_dataset}")
-        st.info("Please ensure the database is properly set up by running 'dbt run' in the dbt directory.")
-
-if __name__ == "__main__":
-    main() 
+            if selected_columns:
+                display_data = current_data[selected_columns]
+                
+                # Search functionality
+                st.markdown("#### Search & Filter")
+                search_term = st.text_input("Search in data (searches all columns)", "")
+                
+                if search_term:
+                    # Create a mask for rows containing the search term
+                    mask = display_data.astype(str).apply(lambda x: x.str.contains(search_term, case=False, na=False)).any(axis=1)
+                    display_data = display_data[mask]
+                
+                # Column filters
+                st.markdown("#### Column Filters")
+                filter_cols = st.multiselect("Select columns to filter by", selected_columns)
+                
+                for col in filter_cols:
+                    if col in display_data.columns:
+                        unique_vals = sorted(display_data[col].unique())
+                        if len(unique_vals) <= 20:  # Only show filter if reasonable number of options
+                            selected_vals = st.multiselect(f"Filter {col}", unique_vals, default=unique_vals)
+                            if selected_vals:
+                                display_data = display_data[display_data[col].isin(selected_vals)]
+                
+                # Pagination
+                st.markdown("#### Pagination")
+                rows_per_page = st.selectbox("Rows per page", [10, 25, 50, 100], index=0)
+                
+                total_rows = len(display_data)
+                total_pages = (total_rows + rows_per_page - 1) // rows_per_page
+                
+                if total_pages > 1:
+                    page = st.selectbox("Page", range(1, total_pages + 1), index=0)
+                    start_idx = (page - 1) * rows_per_page
+                    end_idx = start_idx + rows_per_page
+                else:
+                    start_idx = 0
+                    end_idx = total_rows
+                
+                # Display data
+                st.markdown("#### Data Table")
+                st.markdown(f"Showing rows {start_idx + 1}-{min(end_idx, len(display_data))} of {len(display_data)} total rows")
+                
+                st.dataframe(display_data.iloc[start_idx:end_idx], use_container_width=True)
+                
+                # Export functionality
+                st.markdown("#### Export Data")
+                csv = display_data.to_csv(index=False)
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name=f"{selected_dataset.lower().replace(' ', '_')}_data.csv",
+                    mime="text/csv"
+                )
+                
+                # Data quality insights
+                st.markdown("#### Data Quality Insights")
+                
+                # Missing values
+                st.markdown("**Missing Values by Column:**")
+                missing_data = display_data.isnull().sum()
+                if missing_data.sum() > 0:
+                    st.dataframe(missing_data[missing_data > 0], use_container_width=True)
+                else:
+                    st.success("No missing values found!")
+                
+                # Data types
+                st.markdown("**Data Types:**")
+                dtype_data = display_data.dtypes.to_frame('Data Type')
+                st.dataframe(dtype_data, use_container_width=True) 

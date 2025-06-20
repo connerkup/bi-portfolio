@@ -307,4 +307,32 @@ class ESGAnalyzer:
         total_waste = self.data['total_waste_generated_kg'].sum()
         insights['waste'] = f"Total waste generated: {total_waste:.0f} kg"
 
-        return insights 
+        return insights
+
+    def get_summary(self) -> Dict[str, float]:
+        """
+        Get summary statistics for ESG metrics.
+
+        Returns:
+            Dictionary containing summary statistics
+        """
+        summary = {
+            'total_emissions_kg_co2': self.data['total_emissions_kg_co2'].sum(),
+            'avg_recycled_material_pct': self.data['avg_recycled_material_pct'].mean(),
+            'total_waste_generated_kg': self.data['total_waste_generated_kg'].sum(),
+            'total_energy_consumption_kwh': self.data['total_energy_consumption_kwh'].sum(),
+            'avg_energy_consumption_kwh': self.data['total_energy_consumption_kwh'].mean(),
+        }
+        
+        # Add optional columns if they exist
+        if 'avg_virgin_material_pct' in self.data.columns:
+            summary['avg_virgin_material_pct'] = self.data['avg_virgin_material_pct'].mean()
+        else:
+            summary['avg_virgin_material_pct'] = 0.0
+            
+        if 'avg_recycling_rate_pct' in self.data.columns:
+            summary['avg_recycling_rate_pct'] = self.data['avg_recycling_rate_pct'].mean()
+        else:
+            summary['avg_recycling_rate_pct'] = 0.0
+        
+        return summary 
