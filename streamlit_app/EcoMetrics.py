@@ -66,14 +66,14 @@ def load_all_data():
     """Load all required data from dbt models and raw CSVs with caching."""
     try:
         # Use the correct database path - point to the main project's data directory
-        db_path = "../data/processed/portfolio.duckdb"
+        db_path = "data/processed/portfolio.duckdb"
         
         # Load data with source indicators
         esg_data, esg_source = load_esg_data(db_path)
         finance_data, finance_source = load_finance_data(db_path)
         sales_data, sales_source = load_sales_data(db_path)
-        raw_esg = load_csv_data("../data/raw/sample_esg_data.csv")
-        raw_sales = load_csv_data("../data/raw/sample_sales_data.csv")
+        raw_esg = load_csv_data("data/raw/sample_esg_data.csv")
+        raw_sales = load_csv_data("data/raw/sample_sales_data.csv")
         
         # Enhanced data cleaning to prevent pyarrow issues
         for df in [esg_data, finance_data, sales_data, raw_esg, raw_sales]:
