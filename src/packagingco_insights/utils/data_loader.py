@@ -5,13 +5,13 @@ Data loading utilities for the BI portfolio.
 import pandas as pd
 import duckdb
 import sqlite3
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 import os
 from pathlib import Path
 import numpy as np
 
 
-def connect_to_database(db_path: str = "data/processed/portfolio.duckdb") -> duckdb.DuckDBPyConnection:
+def connect_to_database(db_path: str = "data/processed/portfolio.duckdb") -> Optional[duckdb.DuckDBPyConnection]:
     """
     Connect to the DuckDB database.
     
@@ -19,14 +19,60 @@ def connect_to_database(db_path: str = "data/processed/portfolio.duckdb") -> duc
         db_path: Path to the DuckDB database file
     
     Returns:
-        DuckDB connection object
+        DuckDB connection object or None if database doesn't exist
     """
-    # Ensure the directory exists
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    try:
+        # Check if database file exists
+        if not os.path.exists(db_path):
+            return None
+            
+        # Connect to DuckDB
+        conn = duckdb.connect(db_path)
+        return conn
+    except Exception:
+        return None
+
+
+def check_dbt_tables_exist(db_path: str = "data/processed/portfolio.duckdb") -> bool:
+    """
+    Check if the required dbt tables exist in the database.
     
-    # Connect to DuckDB
-    conn = duckdb.connect(db_path)
-    return conn
+    Args:
+        db_path: Path to the database file
+    
+    Returns:
+        True if all required tables exist, False otherwise
+    """
+    conn = connect_to_database(db_path)
+    if conn is None:
+        return False
+    
+    try:
+        # Check for required tables
+        required_tables = ['fact_esg_monthly', 'fact_financial_monthly', 'stg_sales_data']
+        
+        # Get list of existing tables
+        tables_query = "SHOW TABLES"
+        tables = conn.execute(tables_query).fetchdf()
+        existing_tables = tables['name'].tolist()
+        
+        # Check if all required tables exist
+        for table in required_tables:
+            if table not in existing_tables:
+                return False
+        
+        # Check if tables have data
+        for table in required_tables:
+            count_query = f"SELECT COUNT(*) as count FROM {table}"
+            count = conn.execute(count_query).fetchdf()
+            if count['count'].iloc[0] == 0:
+                return False
+                
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 
 def load_data(query: str, 
@@ -44,6 +90,8 @@ def load_data(query: str,
         DataFrame with the query results
     """
     conn = connect_to_database(db_path)
+    if conn is None:
+        raise FileNotFoundError(f"Database not found: {db_path}")
     
     try:
         # Use DuckDB's execute method instead of pandas read_sql
@@ -70,55 +118,196 @@ def load_csv_data(file_path: str, **kwargs: Any) -> pd.DataFrame:
     return pd.read_csv(file_path, **kwargs)
 
 
-def load_esg_data(db_path: str = "data/processed/portfolio.duckdb") -> pd.DataFrame:
+def create_sample_esg_data() -> pd.DataFrame:
     """
-    Load ESG data from the database.
+    Create sample ESG data from raw CSV files to mimic dbt models.
+    
+    Returns:
+        DataFrame with processed ESG data
+    """
+    try:
+        # Load raw ESG data
+        esg_data = load_csv_data("data/raw/sample_esg_data.csv")
+        
+        # Process to mimic fact_esg_monthly structure
+        esg_data['date'] = pd.to_datetime(esg_data['date'])
+        esg_data['month'] = esg_data['date'].dt.to_period('M')
+        
+        # Group by month and aggregate
+        monthly_esg = esg_data.groupby('month').agg({
+            'total_emissions_kg_co2': 'sum',
+            'recycled_material_pct': 'mean',
+            'energy_efficiency_rating': 'mean',
+            'quality_score': 'mean',
+            'waste_reduction_pct': 'mean'
+        }).reset_index()
+        
+        # Rename columns to match dbt model
+        monthly_esg.columns = [
+            'month', 'total_emissions_kg_co2', 'avg_recycled_material_pct',
+            'avg_efficiency_rating', 'avg_quality_score', 'avg_waste_reduction_pct'
+        ]
+        
+        # Convert month back to datetime
+        monthly_esg['date'] = monthly_esg['month'].dt.to_timestamp()
+        
+        return monthly_esg
+    except Exception as e:
+        # Return minimal sample data if processing fails
+        return pd.DataFrame({
+            'month': pd.date_range('2023-01-01', periods=12, freq='M'),
+            'total_emissions_kg_co2': [1000 + i*100 for i in range(12)],
+            'avg_recycled_material_pct': [75 + i*2 for i in range(12)],
+            'avg_efficiency_rating': [8.0 + i*0.1 for i in range(12)],
+            'avg_quality_score': [9.0 + i*0.05 for i in range(12)],
+            'avg_waste_reduction_pct': [20 + i*1 for i in range(12)],
+            'date': pd.date_range('2023-01-01', periods=12, freq='M')
+        })
+
+
+def create_sample_finance_data() -> pd.DataFrame:
+    """
+    Create sample financial data from raw CSV files to mimic dbt models.
+    
+    Returns:
+        DataFrame with processed financial data
+    """
+    try:
+        # Load raw sales data
+        sales_data = load_csv_data("data/raw/sample_sales_data.csv")
+        
+        # Process to mimic fact_financial_monthly structure
+        sales_data['date'] = pd.to_datetime(sales_data['date'])
+        sales_data['month'] = sales_data['date'].dt.to_period('M')
+        
+        # Calculate financial metrics
+        sales_data['total_revenue'] = sales_data['quantity'] * sales_data['unit_price']
+        sales_data['total_cost'] = sales_data['quantity'] * sales_data['unit_cost']
+        sales_data['total_profit'] = sales_data['total_revenue'] - sales_data['total_cost']
+        sales_data['total_profit_margin'] = (sales_data['total_profit'] / sales_data['total_revenue']) * 100
+        
+        # Group by month and aggregate
+        monthly_finance = sales_data.groupby('month').agg({
+            'total_revenue': 'sum',
+            'total_cost': 'sum',
+            'total_profit': 'sum',
+            'total_profit_margin': 'mean',
+            'quantity': 'sum'
+        }).reset_index()
+        
+        # Rename columns to match dbt model
+        monthly_finance.columns = [
+            'month', 'total_revenue', 'total_cost', 'total_profit',
+            'total_profit_margin', 'total_quantity'
+        ]
+        
+        # Convert month back to datetime
+        monthly_finance['date'] = monthly_finance['month'].dt.to_timestamp()
+        
+        return monthly_finance
+    except Exception as e:
+        # Return minimal sample data if processing fails
+        return pd.DataFrame({
+            'month': pd.date_range('2023-01-01', periods=12, freq='M'),
+            'total_revenue': [100000 + i*10000 for i in range(12)],
+            'total_cost': [70000 + i*7000 for i in range(12)],
+            'total_profit': [30000 + i*3000 for i in range(12)],
+            'total_profit_margin': [30 + i*0.5 for i in range(12)],
+            'total_quantity': [1000 + i*100 for i in range(12)],
+            'date': pd.date_range('2023-01-01', periods=12, freq='M')
+        })
+
+
+def load_esg_data(db_path: str = "data/processed/portfolio.duckdb") -> Tuple[pd.DataFrame, str]:
+    """
+    Load ESG data from the database or fall back to sample data.
     
     Args:
         db_path: Path to the database file
     
     Returns:
-        DataFrame with ESG data
+        Tuple of (DataFrame with ESG data, data source indicator)
     """
-    query = """
-    SELECT * FROM fact_esg_monthly
-    ORDER BY month
-    """
-    return load_data(query, db_path)
+    # First try to load from dbt models
+    if check_dbt_tables_exist(db_path):
+        try:
+            query = """
+            SELECT * FROM fact_esg_monthly
+            ORDER BY month
+            """
+            df = load_data(query, db_path)
+            return df, "dbt_models"
+        except Exception:
+            pass
+    
+    # Fall back to sample data
+    df = create_sample_esg_data()
+    return df, "sample_csv"
 
 
-def load_finance_data(db_path: str = "data/processed/portfolio.duckdb") -> pd.DataFrame:
+def load_finance_data(db_path: str = "data/processed/portfolio.duckdb") -> Tuple[pd.DataFrame, str]:
     """
-    Load financial data from the database.
+    Load financial data from the database or fall back to sample data.
     
     Args:
         db_path: Path to the database file
     
     Returns:
-        DataFrame with financial data
+        Tuple of (DataFrame with financial data, data source indicator)
     """
-    query = """
-    SELECT * FROM fact_financial_monthly
-    ORDER BY month
-    """
-    return load_data(query, db_path)
+    # First try to load from dbt models
+    if check_dbt_tables_exist(db_path):
+        try:
+            query = """
+            SELECT * FROM fact_financial_monthly
+            ORDER BY month
+            """
+            df = load_data(query, db_path)
+            return df, "dbt_models"
+        except Exception:
+            pass
+    
+    # Fall back to sample data
+    df = create_sample_finance_data()
+    return df, "sample_csv"
 
 
-def load_sales_data(db_path: str = "data/processed/portfolio.duckdb") -> pd.DataFrame:
+def load_sales_data(db_path: str = "data/processed/portfolio.duckdb") -> Tuple[pd.DataFrame, str]:
     """
-    Load sales data from the database.
+    Load sales data from the database or fall back to sample data.
     
     Args:
         db_path: Path to the database file
     
     Returns:
-        DataFrame with sales data
+        Tuple of (DataFrame with sales data, data source indicator)
     """
-    query = """
-    SELECT * FROM stg_sales_data
-    ORDER BY date
-    """
-    return load_data(query, db_path)
+    # First try to load from dbt models
+    if check_dbt_tables_exist(db_path):
+        try:
+            query = """
+            SELECT * FROM stg_sales_data
+            ORDER BY date
+            """
+            df = load_data(query, db_path)
+            return df, "dbt_models"
+        except Exception:
+            pass
+    
+    # Fall back to sample data
+    try:
+        df = load_csv_data("data/raw/sample_sales_data.csv")
+        return df, "sample_csv"
+    except Exception:
+        # Return minimal sample data if file not found
+        df = pd.DataFrame({
+            'date': pd.date_range('2023-01-01', periods=365, freq='D'),
+            'product_id': [f'PROD_{i:03d}' for i in range(1, 101)],
+            'quantity': [10 + i for i in range(365)],
+            'unit_price': [100 + i*0.5 for i in range(365)],
+            'unit_cost': [70 + i*0.3 for i in range(365)]
+        })
+        return df, "generated_sample"
 
 
 def get_database_info(db_path: str = "data/processed/portfolio.duckdb") -> Dict[str, Any]:
@@ -132,6 +321,13 @@ def get_database_info(db_path: str = "data/processed/portfolio.duckdb") -> Dict[
         Dictionary with database information
     """
     conn = connect_to_database(db_path)
+    if conn is None:
+        return {
+            'tables': [],
+            'schemas': {},
+            'row_counts': {},
+            'status': 'database_not_found'
+        }
     
     try:
         # Get list of tables
@@ -155,7 +351,8 @@ def get_database_info(db_path: str = "data/processed/portfolio.duckdb") -> Dict[
         return {
             'tables': tables['name'].tolist(),
             'schemas': schemas,
-            'row_counts': row_counts
+            'row_counts': row_counts,
+            'status': 'connected'
         }
     finally:
         conn.close()

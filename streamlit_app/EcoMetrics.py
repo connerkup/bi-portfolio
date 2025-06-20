@@ -67,9 +67,11 @@ def load_all_data():
     try:
         # Use the correct database path - point to the main project's data directory
         db_path = "../data/processed/portfolio.duckdb"
-        esg_data = load_esg_data(db_path)
-        finance_data = load_finance_data(db_path)
-        sales_data = load_sales_data(db_path)
+        
+        # Load data with source indicators
+        esg_data, esg_source = load_esg_data(db_path)
+        finance_data, finance_source = load_finance_data(db_path)
+        sales_data, sales_source = load_sales_data(db_path)
         raw_esg = load_csv_data("../data/raw/sample_esg_data.csv")
         raw_sales = load_csv_data("../data/raw/sample_sales_data.csv")
         
@@ -100,12 +102,12 @@ def load_all_data():
                         # Convert to float64 for better compatibility
                         df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        return esg_data, finance_data, sales_data, raw_esg, raw_sales
+        return esg_data, finance_data, sales_data, raw_esg, raw_sales, esg_source, finance_source, sales_source
     except Exception as e:
         st.error(f"Error loading data: {e}")
         st.session_state.raw_esg_data = None
         st.session_state.raw_sales_data = None
-        return None, None, None, None, None
+        return None, None, None, None, None, "error", "error", "error"
 
 # Load data once and store in session state
 if 'esg_data_full' not in st.session_state:
@@ -115,12 +117,15 @@ if 'esg_data_full' not in st.session_state:
         st.session_state.sales_data_full,
         st.session_state.raw_esg_data,
         st.session_state.raw_sales_data,
+        st.session_state.esg_source,
+        st.session_state.finance_source,
+        st.session_state.sales_source,
     ) = load_all_data()
 
 # Check if data is loaded successfully
 if st.session_state.get('esg_data_full') is None:
-    st.error("Failed to load core dashboard data. Please ensure dbt models have been run.")
-    st.info("To set up the database, run `dbt run` from the `dbt/` directory.")
+    st.error("Failed to load core dashboard data.")
+    st.info("The app will attempt to use sample data instead.")
     st.stop()
 
 # Setup sidebar controls globally for all pages
@@ -130,8 +135,31 @@ setup_sidebar_controls()
 st.title("🌱 EcoMetrics")
 st.markdown("ESG & Financial Intelligence Platform")
 
-# Simple navigation message
-st.sidebar.success("Select a page above.")
+# Display data source indicators
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📊 Data Sources")
+
+# Create data source indicators with appropriate styling
+if st.session_state.get('esg_source') == 'dbt_models':
+    st.sidebar.success("🌱 ESG Data: dbt Models")
+elif st.session_state.get('esg_source') == 'sample_csv':
+    st.sidebar.info("🌱 ESG Data: Sample CSV")
+else:
+    st.sidebar.warning("🌱 ESG Data: Generated Sample")
+
+if st.session_state.get('finance_source') == 'dbt_models':
+    st.sidebar.success("💰 Finance Data: dbt Models")
+elif st.session_state.get('finance_source') == 'sample_csv':
+    st.sidebar.info("💰 Finance Data: Sample CSV")
+else:
+    st.sidebar.warning("💰 Finance Data: Generated Sample")
+
+if st.session_state.get('sales_source') == 'dbt_models':
+    st.sidebar.success("📈 Sales Data: dbt Models")
+elif st.session_state.get('sales_source') == 'sample_csv':
+    st.sidebar.info("📈 Sales Data: Sample CSV")
+else:
+    st.sidebar.warning("📈 Sales Data: Generated Sample")
 
 # Show comprehensive overview content
 st.markdown("## 📊 Executive Summary")
