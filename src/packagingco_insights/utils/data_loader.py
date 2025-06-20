@@ -183,11 +183,11 @@ def create_sample_finance_data() -> pd.DataFrame:
         sales_data['date'] = pd.to_datetime(sales_data['date'])
         sales_data['month'] = sales_data['date'].dt.to_period('M')
         
-        # Calculate financial metrics
-        sales_data['total_revenue'] = sales_data['quantity'] * sales_data['unit_price']
-        sales_data['total_cost'] = sales_data['quantity'] * sales_data['unit_cost']
+        # Calculate financial metrics using correct column names
+        sales_data['total_revenue'] = sales_data['revenue']
+        sales_data['total_cost'] = sales_data['cost_of_goods'] + sales_data['operating_cost']
         sales_data['total_profit'] = sales_data['total_revenue'] - sales_data['total_cost']
-        sales_data['total_profit_margin'] = (sales_data['total_profit'] / sales_data['total_revenue']) * 100
+        sales_data['total_profit_margin'] = sales_data['profit_margin'] * 100
         
         # Group by month and product line, then aggregate
         monthly_finance = sales_data.groupby(['month', 'product_line']).agg({
@@ -195,11 +195,11 @@ def create_sample_finance_data() -> pd.DataFrame:
             'total_cost': 'sum',
             'total_profit': 'sum',
             'total_profit_margin': 'mean',
-            'quantity': 'sum'
+            'units_sold': 'sum'
         }).reset_index()
         
         # Rename column to match dbt model
-        monthly_finance.rename(columns={'quantity': 'total_quantity'}, inplace=True)
+        monthly_finance.rename(columns={'units_sold': 'total_quantity'}, inplace=True)
         
         # Convert month back to datetime
         monthly_finance['date'] = monthly_finance['month'].dt.to_timestamp()
