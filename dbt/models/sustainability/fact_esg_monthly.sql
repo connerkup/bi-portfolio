@@ -1,12 +1,21 @@
 {{
   config(
     materialized='table',
-    description='Monthly ESG metrics fact table for trend analysis'
+    description='Monthly ESG metrics fact table built from transaction-level data',
+    tests=[
+      'test_positive_values',
+      'material_percentages_sum_to_100',
+      'water_usage_consistency',
+      'overall_metrics_consistency',
+      'batch_count_consistency',
+      'percentage_ranges',
+      'score_ranges'
+    ]
   )
 }}
 
-with esg_staged as (
-    select * from {{ ref('stg_esg_data') }}
+with esg_transactions as (
+    select * from {{ ref('stg_esg_transactions') }}
 ),
 
 monthly_esg as (
@@ -66,19 +75,41 @@ monthly_esg as (
         count(case when renewable_energy_category = 'High Renewable Energy' then 1 end) as high_renewable_energy_batches,
         count(case when efficiency_category = 'High Efficiency' then 1 end) as high_efficiency_batches,
         count(case when quality_category = 'Excellent Quality' then 1 end) as excellent_quality_batches,
+        count(case when sustainability_performance = 'Sustainability Leader' then 1 end) as sustainability_leader_batches,
+        count(case when sustainability_performance = 'Sustainability Performer' then 1 end) as sustainability_performer_batches,
+        
+        -- Batch size and timing analysis
+        count(case when batch_size_category = 'Large Batch' then 1 end) as large_batches,
+        count(case when batch_size_category = 'Medium Batch' then 1 end) as medium_batches,
+        count(case when batch_size_category = 'Small Batch' then 1 end) as small_batches,
+        count(case when day_type = 'Weekend' then 1 end) as weekend_batches,
+        count(case when day_type = 'Weekday' then 1 end) as weekday_batches,
+        
+        -- Environmental impact analysis
+        count(case when emissions_category = 'Low Emissions' then 1 end) as low_emissions_batches,
+        count(case when emissions_category = 'Medium Emissions' then 1 end) as medium_emissions_batches,
+        count(case when emissions_category = 'High Emissions' then 1 end) as high_emissions_batches,
+        count(case when water_recycling_category = 'High Water Recycling' then 1 end) as high_water_recycling_batches,
+        count(case when water_recycling_category = 'Medium Water Recycling' then 1 end) as medium_water_recycling_batches,
+        count(case when water_recycling_category = 'Low Water Recycling' then 1 end) as low_water_recycling_batches,
+        
+        -- Product sustainability analysis
+        count(case when sustainability_category = 'Sustainable' then 1 end) as sustainable_product_batches,
+        count(case when sustainability_category = 'Recyclable' then 1 end) as recyclable_product_batches,
+        count(case when sustainability_category = 'Traditional' then 1 end) as traditional_product_batches,
         
         -- Batch counts
         count(*) as total_batches,
         
         -- Calculated derived metrics
-        round(total_emissions_kg_co2 / nullif(total_batch_size, 0), 4) as overall_emissions_per_unit,
-        round(total_energy_consumption_kwh / nullif(total_batch_size, 0), 4) as overall_energy_per_unit,
-        round(total_water_usage_liters / nullif(total_batch_size, 0), 4) as overall_water_per_unit,
-        round(total_waste_generated_kg / nullif(total_batch_size, 0), 4) as overall_waste_per_unit,
+        round(total_emissions_kg_co2 / nullif(total_batch_size, 0), 6) as overall_emissions_per_unit,
+        round(total_energy_consumption_kwh / nullif(total_batch_size, 0), 6) as overall_energy_per_unit,
+        round(total_water_usage_liters / nullif(total_batch_size, 0), 6) as overall_water_per_unit,
+        round(total_waste_generated_kg / nullif(total_batch_size, 0), 6) as overall_waste_per_unit,
         
         -- Efficiency ratios
         round(total_batch_size / nullif(total_production_hours, 0), 2) as overall_units_per_hour,
-        round(total_emissions_kg_co2 / nullif(total_energy_consumption_kwh, 0), 4) as overall_emissions_per_kwh,
+        round(total_emissions_kg_co2 / nullif(total_energy_consumption_kwh, 0), 6) as overall_emissions_per_kwh,
         round(total_water_usage_liters / nullif(total_energy_consumption_kwh, 0), 4) as overall_water_per_kwh,
         
         -- Sustainability ratios
@@ -89,9 +120,20 @@ monthly_esg as (
         round(high_recycled_content_batches * 100.0 / nullif(total_batches, 0), 2) as high_recycled_content_rate_pct,
         round(high_renewable_energy_batches * 100.0 / nullif(total_batches, 0), 2) as high_renewable_energy_rate_pct,
         round(high_efficiency_batches * 100.0 / nullif(total_batches, 0), 2) as high_efficiency_rate_pct,
-        round(excellent_quality_batches * 100.0 / nullif(total_batches, 0), 2) as excellent_quality_rate_pct
+        round(excellent_quality_batches * 100.0 / nullif(total_batches, 0), 2) as excellent_quality_rate_pct,
+        round(sustainability_leader_batches * 100.0 / nullif(total_batches, 0), 2) as sustainability_leader_rate_pct,
+        round(sustainability_performer_batches * 100.0 / nullif(total_batches, 0), 2) as sustainability_performer_rate_pct,
         
-    from esg_staged
+        -- Batch mix analysis
+        round(large_batches * 100.0 / nullif(total_batches, 0), 2) as large_batch_rate_pct,
+        round(sustainable_product_batches * 100.0 / nullif(total_batches, 0), 2) as sustainable_product_rate_pct,
+        round(low_emissions_batches * 100.0 / nullif(total_batches, 0), 2) as low_emissions_rate_pct,
+        round(high_water_recycling_batches * 100.0 / nullif(total_batches, 0), 2) as high_water_recycling_rate_pct,
+        
+        -- Production timing analysis
+        round(weekend_batches * 100.0 / nullif(total_batches, 0), 2) as weekend_rate_pct
+        
+    from esg_transactions
     group by 1, 2, 3, 4, 5, 6, 7, 8
 ),
 
@@ -199,94 +241,46 @@ final as (
             else 'Poor Quality'
         end as quality_category,
         
+        -- Transaction-level sustainability insights
         case 
-            when technology_level = 'Advanced' and avg_efficiency_rating >= 0.95 then 'Advanced High Performance'
-            when technology_level = 'Advanced' then 'Advanced Standard Performance'
-            when technology_level = 'Standard' and avg_efficiency_rating >= 0.90 then 'Standard High Performance'
-            when technology_level = 'Standard' then 'Standard Performance'
-            when technology_level = 'Basic' and avg_efficiency_rating >= 0.85 then 'Basic High Performance'
-            else 'Basic Performance'
-        end as technology_performance,
-        
-        -- Trend indicators
-        case 
-            when prev_month_emissions_per_unit is not null 
-                 and overall_emissions_per_unit < prev_month_emissions_per_unit * 0.95 then 'Improving'
-            when prev_month_emissions_per_unit is not null 
-                 and overall_emissions_per_unit > prev_month_emissions_per_unit * 1.05 then 'Declining'
-            else 'Stable'
-        end as emissions_trend,
+            when sustainability_leader_rate_pct >= 25 then 'High Sustainability Leadership'
+            when sustainability_leader_rate_pct >= 10 then 'Medium Sustainability Leadership'
+            else 'Low Sustainability Leadership'
+        end as sustainability_leadership_category,
         
         case 
-            when prev_month_recycled_pct is not null 
-                 and avg_recycled_material_pct > prev_month_recycled_pct + 5 then 'Improving'
-            when prev_month_recycled_pct is not null 
-                 and avg_recycled_material_pct < prev_month_recycled_pct - 5 then 'Declining'
-            else 'Stable'
-        end as recycled_content_trend,
+            when sustainable_product_rate_pct >= 50 then 'High Sustainable Product Mix'
+            when sustainable_product_rate_pct >= 25 then 'Medium Sustainable Product Mix'
+            else 'Low Sustainable Product Mix'
+        end as sustainable_product_mix_category,
         
         case 
-            when prev_month_renewable_pct is not null 
-                 and avg_renewable_energy_pct > prev_month_renewable_pct + 5 then 'Improving'
-            when prev_month_renewable_pct is not null 
-                 and avg_renewable_energy_pct < prev_month_renewable_pct - 5 then 'Declining'
-            else 'Stable'
-        end as renewable_energy_trend,
-        
-        -- Performance benchmarks (industry standards)
-        case 
-            when overall_emissions_per_unit <= 0.3 then 'Industry Leader'
-            when overall_emissions_per_unit <= 0.7 then 'Above Average'
-            when overall_emissions_per_unit <= 1.2 then 'Average'
-            else 'Below Average'
-        end as emissions_benchmark,
+            when low_emissions_rate_pct >= 60 then 'High Low Emissions Performance'
+            when low_emissions_rate_pct >= 30 then 'Medium Low Emissions Performance'
+            else 'Low Low Emissions Performance'
+        end as low_emissions_performance_category,
         
         case 
-            when avg_recycled_material_pct >= 80 then 'Industry Leader'
-            when avg_recycled_material_pct >= 60 then 'Above Average'
-            when avg_recycled_material_pct >= 40 then 'Average'
-            else 'Below Average'
-        end as recycled_content_benchmark,
+            when high_water_recycling_rate_pct >= 70 then 'High Water Recycling Performance'
+            when high_water_recycling_rate_pct >= 40 then 'Medium Water Recycling Performance'
+            else 'Low Water Recycling Performance'
+        end as water_recycling_performance_category,
         
-        case 
-            when avg_renewable_energy_pct >= 70 then 'Industry Leader'
-            when avg_renewable_energy_pct >= 50 then 'Above Average'
-            when avg_renewable_energy_pct >= 30 then 'Average'
-            else 'Below Average'
-        end as renewable_energy_benchmark,
-        
-        -- Sustainability score (composite metric)
+        -- Composite sustainability score (0-100)
         round(
-            (case when overall_emissions_per_unit <= 0.5 then 100
-                  when overall_emissions_per_unit <= 1.0 then 75
-                  when overall_emissions_per_unit <= 1.5 then 50
-                  else 25 end) * 0.3 +
-            (case when avg_recycled_material_pct >= 70 then 100
-                  when avg_recycled_material_pct >= 40 then 75
-                  when avg_recycled_material_pct >= 20 then 50
-                  else 25 end) * 0.3 +
-            (case when avg_renewable_energy_pct >= 60 then 100
-                  when avg_renewable_energy_pct >= 30 then 75
-                  when avg_renewable_energy_pct >= 15 then 50
-                  else 25 end) * 0.2 +
-            (case when overall_water_recycling_pct >= 80 then 100
-                  when overall_water_recycling_pct >= 60 then 75
-                  when overall_water_recycling_pct >= 40 then 50
-                  else 25 end) * 0.2, 1
-        ) as sustainability_score,
-        
-        -- Risk assessment
-        case 
-            when overall_emissions_per_unit > 1.5 
-                 or avg_recycled_material_pct < 20 
-                 or avg_renewable_energy_pct < 10 
-                 or overall_water_recycling_pct < 30 then 'High Risk'
-            when overall_emissions_per_unit > 1.0 
-                 or avg_recycled_material_pct < 40 
-                 or avg_renewable_energy_pct < 20 
-                 or overall_water_recycling_pct < 50 then 'Medium Risk'
-            else 'Low Risk'
-        end as sustainability_risk_level
+            -- Emissions component (25% weight) - lower is better
+            (25 * (1 - least(overall_emissions_per_unit / 2.0, 1.0))) +
+            -- Recycled material component (20% weight) - higher is better
+            (20 * least(avg_recycled_material_pct / 100.0, 1.0)) +
+            -- Renewable energy component (20% weight) - higher is better
+            (20 * least(avg_renewable_energy_pct / 100.0, 1.0)) +
+            -- Water recycling component (15% weight) - higher is better
+            (15 * least(overall_water_recycling_pct / 100.0, 1.0)) +
+            -- Efficiency component (10% weight) - higher is better
+            (10 * avg_efficiency_rating) +
+            -- Quality component (10% weight) - higher is better
+            (10 * avg_quality_score)
+        , 2) as sustainability_score
         
     from trend_analysis
 )

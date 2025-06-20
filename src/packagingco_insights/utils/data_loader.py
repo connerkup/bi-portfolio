@@ -31,7 +31,7 @@ def connect_to_database(db_path: str = "data/processed/portfolio.duckdb") -> duc
 
 def load_data(query: str, 
               db_path: str = "data/processed/portfolio.duckdb",
-              **kwargs) -> pd.DataFrame:
+              **kwargs: Any) -> pd.DataFrame:
     """
     Load data from the database using a SQL query.
     
@@ -46,13 +46,14 @@ def load_data(query: str,
     conn = connect_to_database(db_path)
     
     try:
-        df = pd.read_sql(query, conn, **kwargs)
+        # Use DuckDB's execute method instead of pandas read_sql
+        df = conn.execute(query).fetchdf()
         return df
     finally:
         conn.close()
 
 
-def load_csv_data(file_path: str, **kwargs) -> pd.DataFrame:
+def load_csv_data(file_path: str, **kwargs: Any) -> pd.DataFrame:
     """
     Load data from a CSV file.
     
@@ -179,7 +180,8 @@ def check_data_quality(df: pd.DataFrame) -> Dict[str, Any]:
     }
     
     # Check for numeric columns and their ranges
-    numeric_columns = df.select_dtypes(include=[np.number]).columns
+    # Include boolean columns as they are numeric in pandas
+    numeric_columns = df.select_dtypes(include=[np.number, 'bool']).columns
     numeric_stats = {}
     for col in numeric_columns:
         numeric_stats[col] = {

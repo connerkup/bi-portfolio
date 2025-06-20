@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import random
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 import os
 
 
@@ -315,16 +315,16 @@ class MockDataGenerator:
                 quantity = max(1, quantity)  # Ensure positive
                 
                 # Calculate costs and prices with realistic variation
-                base_cost = product_config['base_cost']
-                base_price = product_config['base_price']
+                base_cost = float(product_config['base_cost'])
+                base_price = float(product_config['base_price'])
                 
                 # Add regional price premium and seasonal variation
-                regional_premium = self.regions[region]['price_premium']
+                regional_premium = float(self.regions[region]['price_premium'])
                 seasonal_factor = 1 + 0.15 * np.sin(2 * np.pi * date.dayofyear / 365)
                 
                 # Add market growth over time
                 days_from_start = (date - start).days
-                growth_factor = 1 + (days_from_start / 365) * self.regions[region]['market_growth']
+                growth_factor = 1 + (days_from_start / 365) * float(self.regions[region]['market_growth'])
                 
                 final_price = base_price * regional_premium * seasonal_factor * growth_factor
                 final_price *= random.uniform(0.95, 1.05)  # Small random variation
@@ -332,7 +332,7 @@ class MockDataGenerator:
                 # Calculate costs with supplier variation
                 supplier = random.choice(list(self.suppliers.keys()))
                 supplier_config = self.suppliers[supplier]
-                final_cost = base_cost * supplier_config['cost_factor'] * random.uniform(0.9, 1.1)
+                final_cost = base_cost * float(supplier_config['cost_factor']) * random.uniform(0.9, 1.1)
                 
                 # Calculate revenue and costs
                 revenue = quantity * final_price
@@ -348,7 +348,7 @@ class MockDataGenerator:
                 
                 # Add delivery and payment information
                 delivery_date = date + timedelta(days=random.randint(1, 14))
-                payment_terms = segment_config['payment_terms']
+                payment_terms = str(segment_config['payment_terms'])
                 payment_status = random.choice(['Paid', 'Pending', 'Overdue'])
                 
                 transactions.append({
@@ -371,9 +371,9 @@ class MockDataGenerator:
                     'delivery_date': delivery_date,
                     'payment_terms': payment_terms,
                     'payment_status': payment_status,
-                    'currency': self.regions[region]['currency'],
-                    'weight_kg': quantity * product_config['weight_kg'],
-                    'volume_liters': quantity * product_config['volume_liters']
+                    'currency': str(self.regions[region]['currency']),
+                    'weight_kg': quantity * float(product_config['weight_kg']),
+                    'volume_liters': quantity * float(product_config['volume_liters'])
                 })
         
         return pd.DataFrame(transactions)
@@ -409,33 +409,33 @@ class MockDataGenerator:
                 facility_config = self.facilities[facility]
                 
                 # Generate batch size with facility capacity constraints
-                max_batch_size = facility_config['capacity'] // 30  # Daily capacity
+                max_batch_size = int(facility_config['capacity']) // 30  # Daily capacity
                 batch_size = random.randint(100, max_batch_size)
                 
                 # Calculate ESG metrics based on product and facility
-                efficiency_factor = facility_config['efficiency_factor']
+                efficiency_factor = float(facility_config['efficiency_factor'])
                 
                 # Base emissions and resource usage
-                emissions = batch_size * product_config['emissions_factor'] * efficiency_factor
-                energy = batch_size * product_config['energy_factor'] * efficiency_factor
-                water = batch_size * product_config['water_factor'] * efficiency_factor
-                waste = batch_size * product_config['waste_factor'] * efficiency_factor
+                emissions = batch_size * float(product_config['emissions_factor']) * efficiency_factor
+                energy = batch_size * float(product_config['energy_factor']) * efficiency_factor
+                water = batch_size * float(product_config['water_factor']) * efficiency_factor
+                waste = batch_size * float(product_config['waste_factor']) * efficiency_factor
                 
                 # Material composition with sustainability improvements over time
                 days_from_start = (date - start).days
                 sustainability_progress = min(0.4, days_from_start / 365 * 0.4)  # 40% improvement over year
                 
                 # Facility-specific sustainability initiatives
-                if facility_config['sustainability_initiative']:
+                if bool(facility_config['sustainability_initiative']):
                     sustainability_progress += 0.2
                 
-                recycled_pct = (product_config['recycled_material_potential'] * 
+                recycled_pct = (float(product_config['recycled_material_potential']) * 
                               (0.6 + sustainability_progress) * random.uniform(0.8, 1.2))
                 recycled_pct = min(100, max(0, recycled_pct))
                 virgin_pct = 100 - recycled_pct
                 
                 # Recycling rate based on facility capabilities
-                base_recycling_rate = facility_config['waste_recycling_rate'] * 100
+                base_recycling_rate = float(facility_config['waste_recycling_rate']) * 100
                 recycling_rate = base_recycling_rate * random.uniform(0.9, 1.1)
                 recycling_rate = min(100, max(0, recycling_rate))
                 
@@ -445,7 +445,7 @@ class MockDataGenerator:
                 equipment_id = f"EQ_{random.randint(1000, 9999)}"
                 
                 # Production hours and efficiency
-                production_hours = random.uniform(8, facility_config['production_hours_per_day'])
+                production_hours = random.uniform(8, float(facility_config['production_hours_per_day']))
                 efficiency_rating = random.uniform(0.85, 1.0)
                 
                 # Quality metrics
@@ -453,11 +453,11 @@ class MockDataGenerator:
                 quality_score = 1 - defect_rate
                 
                 # Energy source and efficiency
-                energy_source = facility_config['energy_source']
+                energy_source = str(facility_config['energy_source'])
                 renewable_energy_pct = random.uniform(0.3, 0.8) if 'Renewable' in energy_source else random.uniform(0.1, 0.3)
                 
                 # Water recycling
-                water_recycled = water * facility_config['water_recycling_rate'] * random.uniform(0.8, 1.0)
+                water_recycled = water * float(facility_config['water_recycling_rate']) * random.uniform(0.8, 1.0)
                 water_fresh = water - water_recycled
                 
                 # Add some daily variation and anomalies
@@ -527,11 +527,11 @@ class MockDataGenerator:
                     order_value = order_quantity * random.uniform(2.0, 5.0)
                     
                     # Delivery performance
-                    expected_delivery = date + timedelta(days=supplier_config['delivery_time_days'])
+                    expected_delivery = date + timedelta(days=int(supplier_config['delivery_time_days']))
                     actual_delivery = expected_delivery + timedelta(days=random.randint(-2, 5))
                     
                     # Quality issues
-                    quality_issues = random.random() < (1 - supplier_config['quality_rating'])
+                    quality_issues = random.random() < (1 - float(supplier_config['quality_rating']))
                     defect_quantity = order_quantity * random.uniform(0.01, 0.05) if quality_issues else 0
                     
                     supply_chain_records.append({
@@ -545,8 +545,8 @@ class MockDataGenerator:
                         'on_time_delivery': actual_delivery <= expected_delivery,
                         'quality_issues': quality_issues,
                         'defect_quantity': defect_quantity,
-                        'supplier_reliability': supplier_config['reliability'],
-                        'sustainability_rating': supplier_config['sustainability_rating']
+                        'supplier_reliability': float(supplier_config['reliability']),
+                        'sustainability_rating': float(supplier_config['sustainability_rating'])
                     })
         
         return pd.DataFrame(supply_chain_records)
@@ -567,9 +567,11 @@ class MockDataGenerator:
         transaction_df['date'] = pd.to_datetime(transaction_df['date'])
         
         # Group by month and specified columns
-        monthly_data = transaction_df.groupby([
-            pd.Grouper(key='date', freq='M')
-        ] + group_columns).agg({
+        transaction_df['month'] = transaction_df['date'].dt.to_period('M')
+        group_cols = ['month'] + group_columns
+
+        # Aggregate numeric columns
+        agg_dict = {
             'units_sold': 'sum',
             'revenue': 'sum',
             'cost_of_goods': 'sum',
@@ -577,11 +579,14 @@ class MockDataGenerator:
             'profit_margin': 'sum',
             'weight_kg': 'sum',
             'volume_liters': 'sum'
-        }).reset_index()
-        
-        # Rename date column to match expected format
-        monthly_data['date'] = monthly_data['date'].dt.date
-        monthly_data['date'] = pd.to_datetime(monthly_data['date'])
+        }
+
+        # Only include columns that exist in the DataFrame
+        existing_agg_cols = {k: v for k, v in agg_dict.items() if k in transaction_df.columns}
+        monthly_data = transaction_df.groupby(group_cols)[list(existing_agg_cols.keys())].agg(existing_agg_cols).reset_index()
+
+        # Convert period back to datetime
+        monthly_data['month'] = monthly_data['month'].dt.to_timestamp()
         
         return monthly_data
 
@@ -599,31 +604,33 @@ class MockDataGenerator:
         esg_df['date'] = pd.to_datetime(esg_df['date'])
         
         # Group by month, product line, and facility
-        monthly_esg = esg_df.groupby([
-            pd.Grouper(key='date', freq='M'),
-            'product_line',
-            'facility'
-        ]).agg({
+        esg_df['month'] = esg_df['date'].dt.to_period('M')
+
+        # Aggregate ESG metrics
+        agg_dict = {
             'batch_size': 'sum',
             'emissions_kg_co2': 'sum',
             'energy_consumption_kwh': 'sum',
             'water_usage_liters': 'sum',
             'water_recycled_liters': 'sum',
             'water_fresh_liters': 'sum',
+            'waste_generated_kg': 'sum',
+            'production_hours': 'sum',
             'recycled_material_pct': 'mean',
             'virgin_material_pct': 'mean',
-            'waste_generated_kg': 'sum',
             'recycling_rate_pct': 'mean',
-            'production_hours': 'sum',
             'efficiency_rating': 'mean',
             'quality_score': 'mean',
             'defect_rate_pct': 'mean',
             'renewable_energy_pct': 'mean'
-        }).reset_index()
-        
-        # Rename date column to match expected format
-        monthly_esg['date'] = monthly_esg['date'].dt.date
-        monthly_esg['date'] = pd.to_datetime(monthly_esg['date'])
+        }
+
+        # Only include columns that exist in the DataFrame
+        existing_agg_cols = {k: v for k, v in agg_dict.items() if k in esg_df.columns}
+        monthly_esg = esg_df.groupby(['month', 'product_line', 'facility'])[list(existing_agg_cols.keys())].agg(existing_agg_cols).reset_index()
+
+        # Convert period back to datetime
+        monthly_esg['month'] = monthly_esg['month'].dt.to_timestamp()
         
         return monthly_esg
 

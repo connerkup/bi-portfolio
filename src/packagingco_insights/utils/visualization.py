@@ -4,59 +4,51 @@ Visualization utilities for the BI portfolio dashboard.
 
 import streamlit as st
 import plotly.graph_objects as go
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Literal
 import pandas as pd
 
 
-def create_kpi_card(title: str, 
-                   value: float, 
-                   delta: Optional[float] = None,
-                   delta_label: str = "vs previous period",
-                   format_type: str = "number",
-                   return_html: bool = False) -> Optional[str]:
+def _format_value(value: float, format_type: str) -> str:
+    """Helper to format KPI values."""
+    if format_type == "currency":
+        return f"${value:,.0f}"
+    elif format_type == "percentage":
+        return f"{value:.1f}%"
+    return f"{value:,.0f}"
+
+
+def create_kpi_card(
+    title: str, 
+    value: float, 
+    delta: Optional[float] = None,
+    format_type: str = "number",
+    help_text: Optional[str] = None,
+    delta_color: Literal["normal", "inverse", "off"] = "normal"
+):
     """
-    Create a KPI card in Streamlit using custom HTML for better layout control.
-    If return_html is True, return the HTML string instead of rendering.
+    Create a KPI card using st.metric.
     
     Args:
-        title: Title of the KPI
-        value: Current value
-        delta: Change from previous period
-        delta_label: Label for the delta
-        format_type: Type of formatting ('number', 'currency', 'percentage')
+        title: Title of the KPI.
+        value: Current value.
+        delta: Change from previous period.
+        format_type: Type of formatting ('number', 'currency', 'percentage').
+        help_text: Optional help text for the metric.
+        delta_color: Color for the delta indicator ('normal', 'inverse', 'off').
     """
-    if format_type == "currency":
-        formatted_value = f"${value:,.0f}"
-        if delta is not None:
-            try:
-                formatted_delta = f"${float(delta):+,.0f}"
-            except (ValueError, TypeError):
-                formatted_delta = str(delta)
-    elif format_type == "percentage":
-        formatted_value = f"{value:.1f}%"
-        if delta is not None:
-            try:
-                formatted_delta = f"{float(delta):+.1f}%"
-            except (ValueError, TypeError):
-                formatted_delta = str(delta)
-    else:
-        formatted_value = f"{value:,.0f}"
-        if delta is not None:
-            try:
-                formatted_delta = f"{float(delta):+,.0f}"
-            except (ValueError, TypeError):
-                formatted_delta = str(delta)
+    formatted_value = _format_value(value, format_type)
+    
+    formatted_delta = None
+    if delta is not None:
+        formatted_delta = _format_value(abs(delta), format_type)
 
-    # Custom HTML for KPI card (no leading newline or indentation)
-    card_html = f"""<div class=\"metric-card\">
-    <div style=\"font-size:1.05rem;font-weight:600;margin-bottom:0.25rem;white-space:normal;\">{title}</div>
-    <div style=\"font-size:2.1rem;font-weight:700;line-height:1.1;\">{formatted_value}</div>
-    {f'<div style=\"font-size:1rem;color:#90caf9;font-weight:500;\">{formatted_delta} <span style=\"font-size:0.85rem;color:#b0bec5;font-weight:400;\">{delta_label}</span></div>' if delta is not None else ''}
-</div>"""
-    if return_html:
-        return card_html
-    st.markdown(card_html, unsafe_allow_html=True)
-    return None
+    st.metric(
+        label=title, 
+        value=formatted_value, 
+        delta=formatted_delta,
+        delta_color=delta_color,
+        help=help_text
+    )
 
 
 def format_currency(value: float, currency: str = "USD") -> str:
@@ -336,4 +328,24 @@ def apply_filters(data: pd.DataFrame, filters: Dict[str, Any]) -> pd.DataFrame:
         if col in filtered_data.columns and values:
             filtered_data = filtered_data[filtered_data[col].isin(values)]
     
-    return filtered_data 
+    return filtered_data
+
+
+def display_charts_responsive(charts_data: List[go.Figure], titles: Optional[List[str]] = None):
+    """
+    Display a list of Plotly charts responsively in columns.
+    
+    Args:
+        charts_data: A list of Plotly figure objects.
+        titles: An optional list of titles for each chart.
+    """
+    if not charts_data:
+        return
+
+    # Use columns to let Streamlit handle responsive layout
+    cols = st.columns(len(charts_data))
+    for i, chart in enumerate(charts_data):
+        with cols[i]:
+            if titles and i < len(titles):
+                st.subheader(titles[i])
+            st.plotly_chart(chart, use_container_width=True) 

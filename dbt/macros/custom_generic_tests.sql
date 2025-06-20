@@ -1,3 +1,6 @@
+-- Custom generic tests for PackagingCo BI Portfolio
+-- These tests can be applied to any model using the test: macro_name syntax
+
 -- Test that recycled + virgin material percentages equal 100%
 {% test material_percentages_sum_to_100(model) %}
 
@@ -73,8 +76,8 @@ with validation as (
         total_emissions_kg_co2,
         total_batch_size,
         overall_emissions_per_unit,
-        round(total_emissions_kg_co2 / nullif(total_batch_size, 0), 4) as calculated_emissions_per_unit,
-        abs(overall_emissions_per_unit - round(total_emissions_kg_co2 / nullif(total_batch_size, 0), 4)) as difference
+        round(total_emissions_kg_co2 / nullif(total_batch_size, 0), 6) as calculated_emissions_per_unit,
+        abs(overall_emissions_per_unit - round(total_emissions_kg_co2 / nullif(total_batch_size, 0), 6)) as difference
     from {{ model }}
 ),
 
@@ -89,7 +92,7 @@ validation_errors as (
         calculated_emissions_per_unit,
         difference
     from validation
-    where difference > 0.0001  -- Allow for small rounding differences
+    where difference > 0.000001  -- Allow for small rounding differences
 )
 
 select *
@@ -214,6 +217,168 @@ validation_errors as (
     from validation
     where avg_efficiency_rating < 0 or avg_efficiency_rating > 1
        or avg_quality_score < 0 or avg_quality_score > 1
+)
+
+select *
+from validation_errors
+
+{% endtest %}
+
+-- Test that profit margin equals revenue minus costs (for financial models)
+{% test profit_margin_calculation(model) %}
+
+with validation as (
+    select
+        date,
+        product_line,
+        region,
+        customer_segment,
+        total_revenue,
+        total_cost_of_goods,
+        total_operating_cost,
+        total_profit_margin,
+        (total_revenue - total_cost_of_goods - total_operating_cost) as calculated_profit,
+        abs(total_profit_margin - (total_revenue - total_cost_of_goods - total_operating_cost)) as difference
+    from {{ model }}
+),
+
+validation_errors as (
+    select
+        date,
+        product_line,
+        region,
+        customer_segment,
+        total_revenue,
+        total_cost_of_goods,
+        total_operating_cost,
+        total_profit_margin,
+        calculated_profit,
+        difference
+    from validation
+    where difference > 1  -- Allow for small rounding differences
+)
+
+select *
+from validation_errors
+
+{% endtest %}
+
+-- Test that revenue per unit * units sold equals total revenue (for transaction-level models)
+{% test revenue_consistency(model) %}
+
+with validation as (
+    select
+        transaction_id,
+        units_sold,
+        revenue,
+        unit_price,
+        (unit_price * units_sold) as calculated_revenue,
+        abs(revenue - (unit_price * units_sold)) as difference
+    from {{ model }}
+),
+
+validation_errors as (
+    select
+        transaction_id,
+        units_sold,
+        revenue,
+        unit_price,
+        calculated_revenue,
+        difference
+    from validation
+    where difference > 0.01  -- Allow for small rounding differences
+)
+
+select *
+from validation_errors
+
+{% endtest %}
+
+-- Test that transaction timestamps are within reasonable ranges
+{% test timestamp_reasonableness(model) %}
+
+with validation as (
+    select
+        transaction_id,
+        timestamp,
+        date,
+        extract(year from timestamp) as timestamp_year,
+        extract(year from date) as date_year
+    from {{ model }}
+),
+
+validation_errors as (
+    select
+        transaction_id,
+        timestamp,
+        date,
+        timestamp_year,
+        date_year
+    from validation
+    where timestamp_year < 2020 or timestamp_year > 2030  -- Reasonable year range
+       or abs(timestamp_year - date_year) > 1  -- Timestamp and date should be in same year
+)
+
+select *
+from validation_errors
+
+{% endtest %}
+
+-- Test that batch sizes are reasonable for production
+{% test batch_size_reasonableness(model) %}
+
+with validation as (
+    select
+        batch_id,
+        batch_size,
+        product_line
+    from {{ model }}
+),
+
+validation_errors as (
+    select
+        batch_id,
+        batch_size,
+        product_line
+    from validation
+    where batch_size <= 0  -- Batch size should be positive
+       or batch_size > 100000  -- Unreasonably large batch size
+)
+
+select *
+from validation_errors
+
+{% endtest %}
+
+-- Test that environmental impact scores are reasonable
+{% test environmental_impact_reasonableness(model) %}
+
+with validation as (
+    select
+        batch_id,
+        environmental_impact_score,
+        emissions_per_unit,
+        energy_per_unit,
+        water_per_unit,
+        waste_per_unit
+    from {{ model }}
+),
+
+validation_errors as (
+    select
+        batch_id,
+        environmental_impact_score,
+        emissions_per_unit,
+        energy_per_unit,
+        water_per_unit,
+        waste_per_unit
+    from validation
+    where environmental_impact_score < -100  -- Unreasonably low (too good to be true)
+       or environmental_impact_score > 100   -- Unreasonably high
+       or emissions_per_unit < 0
+       or energy_per_unit < 0
+       or water_per_unit < 0
+       or waste_per_unit < 0
 )
 
 select *

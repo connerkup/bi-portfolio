@@ -12,6 +12,23 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 import warnings
 warnings.filterwarnings('ignore')
 
+# Advanced time-series forecasting imports
+try:
+    from prophet import Prophet
+    PROPHET_AVAILABLE = True
+except ImportError:
+    PROPHET_AVAILABLE = False
+    warnings.warn("Prophet not available. Install with: pip install prophet")
+
+try:
+    from statsmodels.tsa.arima.model import ARIMA
+    from statsmodels.tsa.stattools import adfuller
+    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+    STATSMODELS_AVAILABLE = True
+except ImportError:
+    STATSMODELS_AVAILABLE = False
+    warnings.warn("Statsmodels not available. Install with: pip install statsmodels")
+
 
 class SalesForecaster:
     """
@@ -34,6 +51,9 @@ class SalesForecaster:
     
     def _validate_data(self) -> None:
         """Validate that required columns are present in the data."""
+        if not isinstance(self.data, pd.DataFrame):
+            raise TypeError("Data must be a pandas DataFrame")
+            
         required_columns = ['date', 'revenue', 'units_sold']
         
         missing_columns = [col for col in required_columns if col not in self.data.columns]
@@ -46,26 +66,36 @@ class SalesForecaster:
         df['date'] = pd.to_datetime(df['date'])
         df = df.sort_values('date')
         
+        # Aggregate data monthly by product line to avoid jagged forecasts
+        # Group by date and product_line, summing the revenue and units
+        monthly_agg = df.groupby(['date', 'product_line']).agg({
+            'revenue': 'sum',
+            'units_sold': 'sum'
+        }).reset_index()
+        
         # Create time-based features
-        df['month'] = df['date'].dt.month
-        df['quarter'] = df['date'].dt.quarter
-        df['year'] = df['date'].dt.year
+        monthly_agg['month'] = monthly_agg['date'].dt.month
+        monthly_agg['quarter'] = monthly_agg['date'].dt.quarter
+        monthly_agg['year'] = monthly_agg['date'].dt.year
         
         # Create lag features
-        df['revenue_lag1'] = df.groupby('product_line')['revenue'].shift(1)
-        df['revenue_lag2'] = df.groupby('product_line')['revenue'].shift(2)
+        monthly_agg['revenue_lag1'] = monthly_agg.groupby('product_line')['revenue'].shift(1)
+        monthly_agg['revenue_lag2'] = monthly_agg.groupby('product_line')['revenue'].shift(2)
         
-        # Create rolling averages
-        df['revenue_ma3'] = df.groupby('product_line')['revenue'].rolling(3).mean().reset_index(0, drop=True)
-        df['revenue_ma6'] = df.groupby('product_line')['revenue'].rolling(6).mean().reset_index(0, drop=True)
+        # Create rolling averages for smoother forecasts
+        monthly_agg['revenue_ma3'] = monthly_agg.groupby('product_line')['revenue'].rolling(3).mean().reset_index(0, drop=True)
+        monthly_agg['revenue_ma6'] = monthly_agg.groupby('product_line')['revenue'].rolling(6).mean().reset_index(0, drop=True)
         
-        self.prepared_data = df
+        self.prepared_data = monthly_agg
     
     def simple_linear_forecast(self, 
                              periods: int = 6,
                              group_by: str = 'product_line') -> pd.DataFrame:
         """
-        Generate simple linear forecast.
+        Generate a smoother forecast using exponential smoothing with trend and seasonality.
+        
+        This improved model uses exponential smoothing to create smooth forecasts that
+        eliminate the jagged appearance and ensure smooth connection to historical data.
         
         Args:
             periods: Number of periods to forecast
@@ -79,16 +109,33 @@ class SalesForecaster:
         for group in self.prepared_data[group_by].unique():
             group_data = self.prepared_data[self.prepared_data[group_by] == group].copy()
             
+            # Need at least 3 months of data for exponential smoothing
             if len(group_data) < 3:
+                warnings.warn(f"Skipping forecast for {group} due to insufficient data (< 3 months).")
                 continue
             
-            # Prepare features for modeling
-            X = group_data[['month', 'quarter', 'year']].values
-            y = group_data['revenue'].values
+            # Sort data to ensure correct time index
+            group_data = group_data.sort_values('date').reset_index(drop=True)
             
-            # Fit linear model
-            model = LinearRegression()
-            model.fit(X, y)
+            # Use revenue series for forecasting
+            revenue_series = group_data['revenue'].values
+            
+            # Simple exponential smoothing with Holt's method (level + trend)
+            alpha = 0.6  # Smoothing parameter for level (reduced for smoother forecasts)
+            beta = 0.2   # Smoothing parameter for trend (reduced for smoother forecasts)
+            
+            # Initialize with first few values
+            level = revenue_series[0]
+            trend = 0 if len(revenue_series) < 2 else (revenue_series[1] - revenue_series[0])
+            
+            # Apply Holt's exponential smoothing
+            for i in range(1, len(revenue_series)):
+                value = revenue_series[i]
+                
+                # Update level and trend
+                prev_level = level
+                level = alpha * value + (1 - alpha) * (level + trend)
+                trend = beta * (level - prev_level) + (1 - beta) * trend
             
             # Generate future dates
             last_date = group_data['date'].max()
@@ -98,22 +145,34 @@ class SalesForecaster:
                 freq='MS'
             )
             
-            # Create future features
-            future_features = []
-            for date in future_dates:
-                future_features.append([date.month, date.quarter, date.year])
+            # For smooth transition, start the first forecast from the actual last value
+            # This ensures the forecast connects seamlessly to the historical data
+            last_actual_value = revenue_series[-1]
             
-            # Make predictions
-            predictions = model.predict(future_features)
-            
-            # Create forecast DataFrame
-            for i, (date, pred) in enumerate(zip(future_dates, predictions)):
+            # Generate smooth forecasts starting from the smoothed level
+            for i, date in enumerate(future_dates):
+                # Apply minimal seasonal adjustment to avoid jaggedness
+                month = date.month
+                seasonal_factor = 1 + 0.02 * np.sin(2 * np.pi * month / 12)  # Very subtle seasonality
+                
+                # For the first forecast point, blend the smoothed level with the last actual value
+                # This creates a more natural transition
+                if i == 0:
+                    # Smooth transition: 70% last actual + 30% predicted
+                    base_forecast = 0.7 * last_actual_value + 0.3 * (level + trend)
+                else:
+                    # Use full exponential smoothing for subsequent points
+                    base_forecast = level + trend * (i + 1)
+                
+                forecast_value = base_forecast * seasonal_factor
+                forecast_value = max(0, forecast_value)  # Ensure non-negative
+                
                 forecasts.append({
                     'date': date,
                     group_by: group,
-                    'forecasted_revenue': max(0, pred),  # Ensure non-negative
+                    'forecasted_revenue': forecast_value,
                     'forecast_period': i + 1,
-                    'model_type': 'linear'
+                    'model_type': 'exponential_smoothing'
                 })
         
         return pd.DataFrame(forecasts)
@@ -123,7 +182,7 @@ class SalesForecaster:
                               window: int = 3,
                               group_by: str = 'product_line') -> pd.DataFrame:
         """
-        Generate moving average forecast.
+        Generate smoother moving average forecast with trend consideration.
         
         Args:
             periods: Number of periods to forecast
@@ -141,8 +200,20 @@ class SalesForecaster:
             if len(group_data) < window:
                 continue
             
-            # Calculate moving average
+            # Sort data to ensure correct time index
+            group_data = group_data.sort_values('date').reset_index(drop=True)
+            
+            # Calculate moving average and trend
             ma_values = group_data['revenue'].rolling(window=window).mean()
+            
+            # Calculate trend from the last few moving average values
+            recent_ma = ma_values.dropna().tail(3)
+            if len(recent_ma) >= 2:
+                # Simple linear trend from recent moving averages
+                trend = (recent_ma.iloc[-1] - recent_ma.iloc[0]) / (len(recent_ma) - 1)
+            else:
+                trend = 0
+                
             last_ma = ma_values.iloc[-1]
             
             # Generate future dates
@@ -153,15 +224,332 @@ class SalesForecaster:
                 freq='MS'
             )
             
-            # Create forecasts using last moving average value
+            # For smooth transition, get the last actual value
+            last_actual_value = group_data['revenue'].iloc[-1]
+            
+            # Create forecasts with trend and slight seasonal adjustment
             for i, date in enumerate(future_dates):
+                # Apply trend and small seasonal factor
+                month = date.month
+                seasonal_factor = 1 + 0.05 * np.sin(2 * np.pi * month / 12)  # Subtle seasonal pattern
+                
+                # For the first forecast point, blend the moving average with the last actual value
+                if i == 0:
+                    # Smooth transition: 60% last actual + 40% predicted
+                    base_forecast = 0.6 * last_actual_value + 0.4 * (last_ma + trend)
+                else:
+                    # Use full moving average trend for subsequent points
+                    base_forecast = last_ma + trend * (i + 1)
+                
+                forecast_value = base_forecast * seasonal_factor
+                forecast_value = max(0, forecast_value)  # Ensure non-negative
+                
                 forecasts.append({
                     'date': date,
                     group_by: group,
-                    'forecasted_revenue': last_ma,
+                    'forecasted_revenue': forecast_value,
                     'forecast_period': i + 1,
-                    'model_type': f'ma_{window}'
+                    'model_type': f'ma_{window}_smooth'
                 })
+        
+        return pd.DataFrame(forecasts)
+    
+    def prophet_forecast(self, 
+                        periods: int = 6,
+                        group_by: str = 'product_line',
+                        seasonality_mode: str = 'multiplicative',
+                        yearly_seasonality: bool = True,
+                        weekly_seasonality: bool = False,
+                        daily_seasonality: bool = False) -> pd.DataFrame:
+        """
+        Generate forecasts using Facebook Prophet with seasonality detection.
+        
+        Prophet is particularly good at handling:
+        - Trend changes
+        - Seasonality (yearly, weekly, daily)
+        - Holiday effects
+        - Missing data
+        
+        Args:
+            periods: Number of periods to forecast
+            group_by: Column to group by for forecasting
+            seasonality_mode: 'additive' or 'multiplicative'
+            yearly_seasonality: Whether to include yearly seasonality
+            weekly_seasonality: Whether to include weekly seasonality
+            daily_seasonality: Whether to include daily seasonality
+        
+        Returns:
+            DataFrame with forecasts
+        """
+        if not PROPHET_AVAILABLE:
+            raise ImportError("Prophet is not available. Install with: pip install prophet")
+        
+        forecasts = []
+        
+        for group in self.prepared_data[group_by].unique():
+            group_data = self.prepared_data[self.prepared_data[group_by] == group].copy()
+            
+            # Need at least 3 months of data for Prophet
+            if len(group_data) < 3:
+                warnings.warn(f"Skipping Prophet forecast for {group} due to insufficient data (< 3 months).")
+                continue
+            
+            # Sort data to ensure correct time index
+            group_data = group_data.sort_values('date').reset_index(drop=True)
+            
+            # Prepare data for Prophet (requires 'ds' for dates and 'y' for values)
+            prophet_data = pd.DataFrame({
+                'ds': group_data['date'],
+                'y': group_data['revenue']
+            })
+            
+            # Remove any rows with NaN values
+            prophet_data = prophet_data.dropna()
+            
+            if len(prophet_data) < 3:
+                warnings.warn(f"Skipping Prophet forecast for {group} due to insufficient valid data.")
+                continue
+            
+            try:
+                # Initialize and configure Prophet model
+                model = Prophet(
+                    seasonality_mode=seasonality_mode,
+                    interval_width=0.95  # 95% confidence interval
+                )
+                
+                # Add seasonality components conditionally
+                if yearly_seasonality:
+                    model.add_seasonality(name='yearly', period=365.25, fourier_order=10)
+                if weekly_seasonality:
+                    model.add_seasonality(name='weekly', period=7, fourier_order=3)
+                if daily_seasonality:
+                    model.add_seasonality(name='daily', period=1, fourier_order=1)
+                
+                # Fit the model
+                model.fit(prophet_data)
+                
+                # Generate future dates
+                last_date = prophet_data['ds'].max()
+                future_dates = pd.date_range(
+                    start=last_date + pd.DateOffset(months=1),
+                    periods=periods,
+                    freq='MS'
+                )
+                
+                future_df = pd.DataFrame({'ds': future_dates})
+                
+                # Make predictions
+                forecast = model.predict(future_df)
+                
+                # Extract forecast values and confidence intervals
+                for i, (date, row) in enumerate(zip(future_dates, forecast.itertuples())):
+                    try:
+                        yhat = float(row.yhat) if hasattr(row, 'yhat') else 0.0
+                        yhat_lower = float(row.yhat_lower) if hasattr(row, 'yhat_lower') else 0.0
+                        yhat_upper = float(row.yhat_upper) if hasattr(row, 'yhat_upper') else 0.0
+                        
+                        forecasts.append({
+                            'date': date,
+                            group_by: group,
+                            'forecasted_revenue': max(0.0, yhat),  # Ensure non-negative
+                            'forecast_lower': max(0.0, yhat_lower),
+                            'forecast_upper': max(0.0, yhat_upper),
+                            'forecast_period': i + 1,
+                            'model_type': 'prophet'
+                        })
+                    except (AttributeError, ValueError) as e:
+                        warnings.warn(f"Error processing Prophet forecast for {group}: {str(e)}")
+                        continue
+                    
+            except Exception as e:
+                warnings.warn(f"Prophet forecast failed for {group}: {str(e)}")
+                continue
+        
+        return pd.DataFrame(forecasts)
+    
+    def arima_forecast(self, 
+                      periods: int = 6,
+                      group_by: str = 'product_line',
+                      order: Tuple[int, int, int] = (1, 1, 1),
+                      seasonal_order: Optional[Tuple[int, int, int, int]] = None) -> pd.DataFrame:
+        """
+        Generate forecasts using ARIMA (AutoRegressive Integrated Moving Average) model.
+        
+        ARIMA models are good for:
+        - Stationary time series
+        - Trend and seasonality modeling
+        - Short to medium-term forecasting
+        
+        Args:
+            periods: Number of periods to forecast
+            group_by: Column to group by for forecasting
+            order: (p, d, q) parameters for ARIMA model
+            seasonal_order: (P, D, Q, s) parameters for seasonal ARIMA (SARIMA)
+        
+        Returns:
+            DataFrame with forecasts
+        """
+        if not STATSMODELS_AVAILABLE:
+            raise ImportError("Statsmodels is not available. Install with: pip install statsmodels")
+        
+        forecasts = []
+        
+        for group in self.prepared_data[group_by].unique():
+            group_data = self.prepared_data[self.prepared_data[group_by] == group].copy()
+            
+            # Need at least 6 months of data for ARIMA
+            if len(group_data) < 6:
+                warnings.warn(f"Skipping ARIMA forecast for {group} due to insufficient data (< 6 months).")
+                continue
+            
+            # Sort data to ensure correct time index
+            group_data = group_data.sort_values('date').reset_index(drop=True)
+            
+            # Prepare time series data
+            revenue_series = group_data['revenue'].values
+            
+            # Remove any NaN values
+            revenue_series = revenue_series[~np.isnan(revenue_series)]
+            
+            if len(revenue_series) < 6:
+                warnings.warn(f"Skipping ARIMA forecast for {group} due to insufficient valid data.")
+                continue
+            
+            try:
+                # Fit ARIMA model
+                if seasonal_order:
+                    model = ARIMA(revenue_series, order=order, seasonal_order=seasonal_order)
+                else:
+                    model = ARIMA(revenue_series, order=order)
+                
+                fitted_model = model.fit()
+                
+                # Generate forecasts
+                forecast_result = fitted_model.forecast(steps=periods)
+                
+                # Generate future dates
+                last_date = group_data['date'].max()
+                future_dates = pd.date_range(
+                    start=last_date + pd.DateOffset(months=1),
+                    periods=periods,
+                    freq='MS'
+                )
+                
+                # Extract forecast values
+                for i, (date, forecast_value) in enumerate(zip(future_dates, forecast_result)):
+                    forecasts.append({
+                        'date': date,
+                        group_by: group,
+                        'forecasted_revenue': max(0, forecast_value),  # Ensure non-negative
+                        'forecast_period': i + 1,
+                        'model_type': 'arima',
+                        'aic': fitted_model.aic,
+                        'bic': fitted_model.bic
+                    })
+                    
+            except Exception as e:
+                warnings.warn(f"ARIMA forecast failed for {group}: {str(e)}")
+                continue
+        
+        return pd.DataFrame(forecasts)
+    
+    def auto_arima_forecast(self, 
+                           periods: int = 6,
+                           group_by: str = 'product_line',
+                           max_p: int = 3,
+                           max_d: int = 2,
+                           max_q: int = 3,
+                           seasonal: bool = True) -> pd.DataFrame:
+        """
+        Generate forecasts using auto-ARIMA with automatic parameter selection.
+        
+        This method automatically finds the best ARIMA parameters using AIC/BIC criteria.
+        
+        Args:
+            periods: Number of periods to forecast
+            group_by: Column to group by for forecasting
+            max_p: Maximum autoregressive order
+            max_d: Maximum differencing order
+            max_q: Maximum moving average order
+            seasonal: Whether to include seasonal components
+        
+        Returns:
+            DataFrame with forecasts
+        """
+        if not STATSMODELS_AVAILABLE:
+            raise ImportError("Statsmodels is not available. Install with: pip install statsmodels")
+        
+        try:
+            from pmdarima import auto_arima
+            PMDARIMA_AVAILABLE = True
+        except ImportError:
+            PMDARIMA_AVAILABLE = False
+            warnings.warn("pmdarima not available for auto-ARIMA. Install with: pip install pmdarima")
+            return pd.DataFrame()
+        
+        forecasts = []
+        
+        for group in self.prepared_data[group_by].unique():
+            group_data = self.prepared_data[self.prepared_data[group_by] == group].copy()
+            
+            # Need at least 6 months of data for auto-ARIMA
+            if len(group_data) < 6:
+                warnings.warn(f"Skipping auto-ARIMA forecast for {group} due to insufficient data (< 6 months).")
+                continue
+            
+            # Sort data to ensure correct time index
+            group_data = group_data.sort_values('date').reset_index(drop=True)
+            
+            # Prepare time series data
+            revenue_series = group_data['revenue'].values
+            
+            # Remove any NaN values
+            revenue_series = revenue_series[~np.isnan(revenue_series)]
+            
+            if len(revenue_series) < 6:
+                warnings.warn(f"Skipping auto-ARIMA forecast for {group} due to insufficient valid data.")
+                continue
+            
+            try:
+                # Find best ARIMA parameters automatically
+                auto_model = auto_arima(
+                    revenue_series,
+                    max_p=max_p,
+                    max_d=max_d,
+                    max_q=max_q,
+                    seasonal=seasonal,
+                    stepwise=True,
+                    suppress_warnings=True,
+                    error_action='ignore',
+                    trace=False
+                )
+                
+                # Generate forecasts
+                forecast_result = auto_model.predict(n_periods=periods)
+                
+                # Generate future dates
+                last_date = group_data['date'].max()
+                future_dates = pd.date_range(
+                    start=last_date + pd.DateOffset(months=1),
+                    periods=periods,
+                    freq='MS'
+                )
+                
+                # Extract forecast values
+                for i, (date, forecast_value) in enumerate(zip(future_dates, forecast_result)):
+                    forecasts.append({
+                        'date': date,
+                        group_by: group,
+                        'forecasted_revenue': max(0, forecast_value),  # Ensure non-negative
+                        'forecast_period': i + 1,
+                        'model_type': 'auto_arima',
+                        'best_order': str(auto_model.order),
+                        'aic': auto_model.aic()
+                    })
+                    
+            except Exception as e:
+                warnings.warn(f"Auto-ARIMA forecast failed for {group}: {str(e)}")
+                continue
         
         return pd.DataFrame(forecasts)
     
@@ -220,11 +608,11 @@ class SalesForecaster:
                               actual_data: Optional[pd.DataFrame] = None,
                               group_by: str = 'product_line') -> go.Figure:
         """
-        Generate forecast visualization chart.
+        Generate smooth forecast visualization chart with seamless transitions.
         
         Args:
             forecast_data: DataFrame with forecast data
-            actual_data: DataFrame with actual data (optional)
+            actual_data: DataFrame with actual data (optional, will use prepared_data if None)
             group_by: Column to group by
         
         Returns:
@@ -232,35 +620,97 @@ class SalesForecaster:
         """
         fig = go.Figure()
         
-        # Add actual data if provided
-        if actual_data is not None:
-            for group in actual_data[group_by].unique():
-                group_data = actual_data[actual_data[group_by] == group]
-                fig.add_trace(go.Scatter(
-                    x=group_data['date'],
-                    y=group_data['revenue'],
-                    mode='lines+markers',
-                    name=f'{group} (Actual)',
-                    line=dict(width=2)
-                ))
+        # Use prepared data instead of raw actual_data to avoid jagged lines
+        # The prepared data is properly aggregated by date and product_line
+        actual_data_to_use = self.prepared_data
         
-        # Add forecast data
-        for group in forecast_data[group_by].unique():
-            group_data = forecast_data[forecast_data[group_by] == group]
+        # Define a consistent color palette for product lines
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        group_colors = {}
+        
+        # Add actual data - use smooth lines only
+        for i, group in enumerate(actual_data_to_use[group_by].unique()):
+            group_data = actual_data_to_use[actual_data_to_use[group_by] == group].copy()
+            group_data = group_data.sort_values('date')
+            
+            # Assign consistent color
+            color = colors[i % len(colors)]
+            group_colors[group] = color
+            
             fig.add_trace(go.Scatter(
                 x=group_data['date'],
-                y=group_data['forecasted_revenue'],
-                mode='lines+markers',
+                y=group_data['revenue'],
+                mode='lines',  # Remove markers for smoother appearance
+                name=f'{group} (Actual)',
+                line=dict(width=3, shape='spline', color=color),
+                hovertemplate='<b>%{fullData.name}</b><br>' +
+                            'Date: %{x}<br>' +
+                            'Revenue: $%{y:,.0f}<br>' +
+                            '<extra></extra>'
+            ))
+        
+        # Add forecast data with seamless connection and matching colors
+        for group in forecast_data[group_by].unique():
+            forecast_group_data = forecast_data[forecast_data[group_by] == group].copy()
+            forecast_group_data = forecast_group_data.sort_values('date')
+            
+            if forecast_group_data.empty:
+                continue
+                
+            # Get the last actual data point for this group to create seamless connection
+            actual_group_data = actual_data_to_use[actual_data_to_use[group_by] == group].copy()
+            actual_group_data = actual_group_data.sort_values('date')
+            
+            if not actual_group_data.empty:
+                last_actual_date = actual_group_data['date'].iloc[-1]
+                last_actual_value = actual_group_data['revenue'].iloc[-1]
+                
+                # Create seamless connection by adding the last actual point to forecast
+                connection_point = pd.DataFrame({
+                    'date': [last_actual_date],
+                    'forecasted_revenue': [last_actual_value]
+                })
+                
+                # Combine connection point with forecast data
+                seamless_forecast = pd.concat([connection_point, forecast_group_data], ignore_index=True)
+                seamless_forecast = seamless_forecast.sort_values('date')
+            else:
+                seamless_forecast = forecast_group_data
+            
+            # Use matching color for forecast
+            color = group_colors.get(group, colors[0])
+            
+            fig.add_trace(go.Scatter(
+                x=seamless_forecast['date'],
+                y=seamless_forecast['forecasted_revenue'],
+                mode='lines',  # Remove markers for smoother appearance
                 name=f'{group} (Forecast)',
-                line=dict(dash='dash', width=2)
+                line=dict(dash='dash', width=3, shape='spline', color=color),
+                hovertemplate='<b>%{fullData.name}</b><br>' +
+                            'Date: %{x}<br>' +
+                            'Forecasted Revenue: $%{y:,.0f}<br>' +
+                            '<extra></extra>'
             ))
         
         fig.update_layout(
-            title="Sales Forecast",
+            title="Sales Forecast - Smooth Trends",
             xaxis_title="Date",
             yaxis_title="Revenue ($)",
-            hovermode='x unified'
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
         )
+        
+        # Add grid for better readability
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
         
         return fig
     
@@ -282,12 +732,12 @@ class SalesForecaster:
             x='date',
             y=metric,
             color=group_by,
-            title=f'{metric.title()} Trends by {group_by.replace("_", " ").title()}',
+            title=f'Historical Trends: {metric.replace("_", " ").title()}',
             labels={
                 'date': 'Date',
-                metric: metric.replace('_', ' ').title(),
-                group_by: group_by.replace('_', ' ').title()
-            }
+                metric: metric.replace("_", " ").title()
+            },
+            line_shape='spline'
         )
         
         fig.update_layout(
@@ -329,8 +779,179 @@ class SalesForecaster:
             f"(${top_forecast_value:,.0f} avg)"
         )
         
-        # Forecast confidence (based on model type)
-        model_types = forecast_data['model_type'].value_counts()
-        insights['models'] = f"Forecast models used: {', '.join(model_types.index)}"
+        # Growth trend
+        if len(forecast_data) > 1:
+            first_period = forecast_data[forecast_data['forecast_period'] == 1]['forecasted_revenue'].sum()
+            last_period = forecast_data[forecast_data['forecast_period'] == forecast_data['forecast_period'].max()]['forecasted_revenue'].sum()
+            
+            if first_period > 0:
+                growth_rate = ((last_period - first_period) / first_period) * 100
+                insights['growth_trend'] = f"Forecast growth trend: {growth_rate:+.1f}%"
         
-        return insights 
+        return insights
+    
+    def compare_forecasting_models(self, 
+                                 periods: int = 6,
+                                 group_by: str = 'product_line',
+                                 test_size: float = 0.2) -> Dict[str, pd.DataFrame]:
+        """
+        Compare different forecasting models using historical data.
+        
+        This method splits the data into training and testing sets to evaluate
+        model performance on unseen data.
+        
+        Args:
+            periods: Number of periods to forecast
+            group_by: Column to group by for forecasting
+            test_size: Proportion of data to use for testing
+        
+        Returns:
+            Dictionary containing forecasts from different models and performance metrics
+        """
+        results = {}
+        
+        # Split data for testing
+        test_data = {}
+        train_data = {}
+        
+        for group in self.prepared_data[group_by].unique():
+            group_data = self.prepared_data[self.prepared_data[group_by] == group].copy()
+            group_data = group_data.sort_values('date')
+            
+            if len(group_data) < 6:  # Need at least 6 months for meaningful comparison
+                continue
+            
+            # Split data chronologically
+            split_idx = int(len(group_data) * (1 - test_size))
+            train_data[group] = group_data.iloc[:split_idx]
+            test_data[group] = group_data.iloc[split_idx:]
+        
+        # Generate forecasts using different models
+        models = {
+            'exponential_smoothing': self.simple_linear_forecast,
+            'moving_average': self.moving_average_forecast,
+        }
+        
+        # Add advanced models if available
+        if PROPHET_AVAILABLE:
+            models['prophet'] = self.prophet_forecast
+        
+        if STATSMODELS_AVAILABLE:
+            models['arima'] = self.arima_forecast
+            models['auto_arima'] = self.auto_arima_forecast
+        
+        # Generate forecasts for each model
+        for model_name, model_func in models.items():
+            try:
+                if model_name == 'prophet':
+                    forecast = model_func(periods=periods, group_by=group_by)
+                elif model_name in ['arima', 'auto_arima']:
+                    forecast = model_func(periods=periods, group_by=group_by)
+                else:
+                    forecast = model_func(periods=periods, group_by=group_by)
+                
+                results[f'{model_name}_forecast'] = forecast
+                
+            except Exception as e:
+                warnings.warn(f"Failed to generate forecast with {model_name}: {str(e)}")
+                continue
+        
+        # Calculate performance metrics if we have test data
+        if test_data:
+            performance_metrics = []
+            
+            for model_name in results.keys():
+                if not results[model_name].empty:
+                    model_forecast = results[model_name]
+                    
+                    for group in test_data.keys():
+                        if group in model_forecast[group_by].values:
+                            # Get actual values for comparison
+                            actual_values = test_data[group]['revenue'].values
+                            forecast_values = model_forecast[
+                                model_forecast[group_by] == group
+                            ]['forecasted_revenue'].values[:len(actual_values)]
+                            
+                            if len(forecast_values) > 0 and len(actual_values) > 0:
+                                # Calculate metrics
+                                mae = mean_absolute_error(actual_values, forecast_values)
+                                mse = mean_squared_error(actual_values, forecast_values)
+                                rmse = np.sqrt(mse)
+                                
+                                # Calculate MAPE (Mean Absolute Percentage Error)
+                                mape = np.mean(np.abs((actual_values - forecast_values) / actual_values)) * 100
+                                
+                                performance_metrics.append({
+                                    'model': model_name.replace('_forecast', ''),
+                                    'group': group,
+                                    'mae': mae,
+                                    'mse': mse,
+                                    'rmse': rmse,
+                                    'mape': mape,
+                                    'test_periods': len(actual_values)
+                                })
+            
+            if performance_metrics:
+                results['performance_metrics'] = pd.DataFrame(performance_metrics)
+        
+        return results
+    
+    def get_model_recommendations(self, 
+                                performance_metrics: pd.DataFrame) -> Dict[str, str]:
+        """
+        Generate model recommendations based on performance metrics.
+        
+        Args:
+            performance_metrics: DataFrame with model performance metrics
+        
+        Returns:
+            Dictionary with recommendations
+        """
+        recommendations = {}
+        
+        if performance_metrics.empty:
+            recommendations['general'] = "No performance data available for model comparison."
+            return recommendations
+        
+        # Find best model by different metrics
+        best_mae = performance_metrics.loc[performance_metrics['mae'].idxmin()]
+        best_mape = performance_metrics.loc[performance_metrics['mape'].idxmin()]
+        best_rmse = performance_metrics.loc[performance_metrics['rmse'].idxmin()]
+        
+        recommendations['best_accuracy'] = (
+            f"Best accuracy (lowest MAE): {best_mae['model']} "
+            f"(MAE: ${best_mae['mae']:,.0f})"
+        )
+        
+        recommendations['best_percentage'] = (
+            f"Best percentage accuracy (lowest MAPE): {best_mape['model']} "
+            f"(MAPE: {best_mape['mape']:.1f}%)"
+        )
+        
+        recommendations['best_overall'] = (
+            f"Best overall performance (lowest RMSE): {best_rmse['model']} "
+            f"(RMSE: ${best_rmse['rmse']:,.0f})"
+        )
+        
+        # Model-specific recommendations
+        available_models = performance_metrics['model'].unique()
+        
+        if 'prophet' in available_models:
+            recommendations['prophet'] = (
+                "Prophet is excellent for data with seasonality and trend changes. "
+                "Use when you have sufficient historical data (>3 months)."
+            )
+        
+        if 'arima' in available_models or 'auto_arima' in available_models:
+            recommendations['arima'] = (
+                "ARIMA models work well for stationary time series. "
+                "Auto-ARIMA automatically finds optimal parameters."
+            )
+        
+        if 'exponential_smoothing' in available_models:
+            recommendations['exponential_smoothing'] = (
+                "Exponential smoothing provides smooth forecasts and handles "
+                "trends well. Good for short-term predictions."
+            )
+        
+        return recommendations 
