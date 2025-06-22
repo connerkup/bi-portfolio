@@ -216,3 +216,6 @@ data/*.duckdb
 # Keep sample data files
 !data/raw/sample_*.csv
 !data/processed/sample_*.csv
+
+# Allow dbt database for Streamlit Cloud deployment
+!ecometrics/portfolio.duckdb
