@@ -29,9 +29,9 @@ class DBTDataConnector:
         if db_path is None:
             # Try multiple possible paths for different deployment scenarios
             possible_paths = [
-                "ecometrics/portfolio.duckdb",          # For Streamlit Cloud & local after prep script
+                "portfolio.duckdb",                     # Current directory (ecometrics/portfolio.duckdb)
                 "data/processed/portfolio.duckdb",      # Local development (dbt run output)
-                "portfolio.duckdb",                     # If db is in root for some reason
+                "../data/processed/portfolio.duckdb",   # From ecometrics directory
             ]
             
             for path in possible_paths:
