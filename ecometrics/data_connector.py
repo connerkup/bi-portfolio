@@ -61,7 +61,14 @@ class DuckDBConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]):
             raise
     
     def cursor(self) -> duckdb.DuckDBPyConnection:
-        return self._instance.cursor()
+        logger.info("Getting cursor from connection...")
+        try:
+            cursor = self._instance.cursor()
+            logger.info("Cursor obtained successfully")
+            return cursor
+        except Exception as e:
+            logger.error(f"Error getting cursor: {e}")
+            raise
     
     def query(self, query: str, ttl: int = 3600, **kwargs) -> pd.DataFrame:
         @cache_data(ttl=ttl)
@@ -77,14 +84,22 @@ class DuckDBConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]):
         @cache_data(ttl=ttl)
         def _get_tables() -> List[str]:
             logger.info("Getting available tables from database...")
-            cursor = self.cursor()
             try:
+                cursor = self.cursor()
+                logger.info("Cursor obtained successfully")
+                
+                logger.info("Executing SHOW TABLES query...")
                 tables = cursor.execute("SHOW TABLES").fetchdf()
+                logger.info(f"SHOW TABLES query result: {tables}")
+                
                 table_list = tables['name'].tolist()
                 logger.info(f"Found {len(table_list)} tables: {table_list}")
                 return table_list
             except Exception as e:
                 logger.error(f"Error getting tables: {e}")
+                logger.error(f"Error type: {type(e)}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 return []
         
         return _get_tables()
