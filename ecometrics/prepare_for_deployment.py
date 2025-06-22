@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from datetime import datetime
 
 
 def run_command(command, cwd=None, check=True):
@@ -149,7 +150,7 @@ def create_deployment_info():
     
     info_content = f"""# Deployment Information
 
-Generated on: {os.popen('date').read().strip()}
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ## Database Information
 - File: portfolio.duckdb
