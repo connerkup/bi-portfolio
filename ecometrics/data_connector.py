@@ -33,6 +33,7 @@ class DuckDBConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]):
             # Fallback to searching for database file
             possible_paths = [
                 "portfolio.duckdb",                     # Current directory
+                "ecometrics/portfolio.duckdb",          # Streamlit Cloud (from repo root)
                 "data/processed/portfolio.duckdb",      # Local development
                 "../data/processed/portfolio.duckdb",   # From ecometrics directory
             ]
