@@ -40,7 +40,7 @@ class DBTDataConnector:
                     break
             else:
                 # Default to the most common path if none found
-                self.db_path = "data/processed/portfolio.duckdb"
+                self.db_path = "portfolio.duckdb"
         else:
             self.db_path = db_path
             
