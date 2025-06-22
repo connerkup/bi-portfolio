@@ -25,8 +25,10 @@ class DuckDBConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]):
         # Try to get database path from secrets or kwargs
         if 'database' in kwargs:
             db_path = kwargs.pop('database')
+            logger.info(f"Using database path from kwargs: {db_path}")
         elif 'database' in self._secrets:
             db_path = self._secrets['database']
+            logger.info(f"Using database path from secrets: {db_path}")
         else:
             # Fallback to searching for database file
             possible_paths = [
@@ -36,8 +38,10 @@ class DuckDBConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]):
             ]
             
             logger.info(f"Searching for database in paths: {possible_paths}")
+            logger.info(f"Current working directory: {os.getcwd()}")
             
             for path in possible_paths:
+                logger.info(f"Checking if path exists: {path}")
                 if os.path.exists(path):
                     db_path = path
                     logger.info(f"Found database at: {db_path}")
@@ -47,7 +51,14 @@ class DuckDBConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]):
                 db_path = "portfolio.duckdb"
                 logger.warning(f"No database found in search paths, defaulting to: {db_path}")
         
-        return duckdb.connect(database=db_path, **kwargs)
+        logger.info(f"Attempting to connect to database: {db_path}")
+        try:
+            conn = duckdb.connect(database=db_path, **kwargs)
+            logger.info(f"Successfully connected to database: {db_path}")
+            return conn
+        except Exception as e:
+            logger.error(f"Failed to connect to database {db_path}: {e}")
+            raise
     
     def cursor(self) -> duckdb.DuckDBPyConnection:
         return self._instance.cursor()
@@ -65,9 +76,16 @@ class DuckDBConnection(ExperimentalBaseConnection[duckdb.DuckDBPyConnection]):
         """Get list of available tables in the database."""
         @cache_data(ttl=ttl)
         def _get_tables() -> List[str]:
+            logger.info("Getting available tables from database...")
             cursor = self.cursor()
-            tables = cursor.execute("SHOW TABLES").fetchdf()
-            return tables['name'].tolist()
+            try:
+                tables = cursor.execute("SHOW TABLES").fetchdf()
+                table_list = tables['name'].tolist()
+                logger.info(f"Found {len(table_list)} tables: {table_list}")
+                return table_list
+            except Exception as e:
+                logger.error(f"Error getting tables: {e}")
+                return []
         
         return _get_tables()
     
@@ -154,17 +172,22 @@ def check_dbt_availability() -> Dict[str, Any]:
     Returns:
         Dictionary with availability status and information
     """
+    logger.info("Starting dbt availability check...")
     try:
         connector = get_data_connector()
+        logger.info("Data connector created successfully")
         
         # Try to get tables to test connection
+        logger.info("Attempting to get available tables...")
         tables = connector.get_available_tables(ttl=60)  # Short TTL for status check
+        logger.info(f"Retrieved {len(tables)} tables: {tables}")
         
         # Check for key dbt models
         key_models = ['fact_esg_monthly', 'fact_financial_monthly', 'stg_sales_data', 'stg_esg_data']
         available_models = [model for model in key_models if model in tables]
+        logger.info(f"Found {len(available_models)}/{len(key_models)} key models: {available_models}")
         
-        return {
+        result = {
             'available': len(available_models) > 0,
             'message': f"Found {len(available_models)}/{len(key_models)} key models",
             'available_tables': tables,
@@ -173,7 +196,10 @@ def check_dbt_availability() -> Dict[str, Any]:
             'db_path': 'portfolio.duckdb',  # This will be resolved by the connection
             'deployment_note': 'Database connection successful!'
         }
+        logger.info(f"Availability check result: {result}")
+        return result
     except Exception as e:
+        logger.error(f"Error during availability check: {e}")
         return {
             'available': False,
             'message': f'Error checking availability: {e}',
