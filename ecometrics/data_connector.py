@@ -175,7 +175,7 @@ def get_data_connector() -> DuckDBConnection:
     Returns:
         DuckDBConnection instance
     """
-    return st.connection("duckdb", type=DuckDBConnection)
+    return st.connection("duckdb_v2", type=DuckDBConnection)
 
 
 def check_dbt_availability() -> Dict[str, Any]:
