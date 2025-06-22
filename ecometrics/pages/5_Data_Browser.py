@@ -21,6 +21,19 @@ if availability['available']:
 else:
     st.error(f"❌ {availability['message']}")
     st.warning("Please ensure dbt pipeline has been run and database is available.")
+    
+    # Show debug information even when models aren't found
+    try:
+        connector = get_data_connector()
+        tables = connector.get_available_tables()
+        if tables:
+            st.info(f"**Debug Info:** Found {len(tables)} tables in database:")
+            for table in tables:
+                st.write(f"  - {table}")
+        else:
+            st.warning("**Debug Info:** No tables found in database.")
+    except Exception as e:
+        st.error(f"**Debug Error:** {e}")
 
 # Get data connector
 connector = get_data_connector()
