@@ -155,7 +155,7 @@ if availability['available']:
         if st.button("Execute Query"):
             if query.strip():
                 try:
-                    result = connector.execute_query(query)
+                    result = connector.query(query)
                     st.success("Query executed successfully!")
                     st.dataframe(result, use_container_width=True)
                     
@@ -199,11 +199,13 @@ else:
     - **Staging Tables**: `stg_esg_data`, `stg_sales_data`, `stg_supply_chain_data`
     - **Mart Tables**: `mart_esg_summary`
     
-    ### Troubleshooting
+    ### Alternative: Use the Deployment Script
     
-    - Check that the database file exists at the expected path
-    - Verify dbt models ran successfully without errors
-    - Ensure all dependencies are installed (`pip install -r requirements.txt`)
+    You can also use the automated deployment script:
+    ```bash
+    cd ecometrics
+    python prepare_for_deployment.py
+    ```
     """)
 
 # Navigation back to home
