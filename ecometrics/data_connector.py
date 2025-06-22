@@ -34,15 +34,20 @@ class DBTDataConnector:
                 "../data/processed/portfolio.duckdb",   # From ecometrics directory
             ]
             
+            logger.info(f"Searching for database in paths: {possible_paths}")
+            
             for path in possible_paths:
                 if os.path.exists(path):
                     self.db_path = path
+                    logger.info(f"Found database at: {self.db_path}")
                     break
             else:
                 # Default to the most common path if none found
                 self.db_path = "portfolio.duckdb"
+                logger.warning(f"No database found in search paths, defaulting to: {self.db_path}")
         else:
             self.db_path = db_path
+            logger.info(f"Using provided database path: {self.db_path}")
             
         self.conn = None
         
@@ -275,10 +280,9 @@ class DBTDataConnector:
         return metrics
 
 
-@st.cache_resource
 def get_data_connector() -> DBTDataConnector:
     """
-    Get a cached data connector instance.
+    Get a data connector instance.
     
     Returns:
         DBTDataConnector instance
