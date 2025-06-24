@@ -17,8 +17,9 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 
 ### **Financial Intelligence** ✅
 - Revenue and profitability analysis
+- Revenue efficiency by product line (revenue per transaction)
 - Cost structure optimization
-- Regional performance insights
+- Regional performance insights with full-width visualizations
 - Growth trend forecasting
 - Profit margin analysis
 
@@ -37,11 +38,12 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 - Market opportunity identification
 
 ### **Interactive Dashboards** ✅
-- Real-time data visualization
+- Real-time data visualization with Altair and Plotly
 - Multi-dimensional filtering
 - Responsive design (mobile-friendly)
 - Export capabilities
 - Drill-down analytics
+- Standardized monochrome pastel color scheme
 
 ### **Data Pipeline** ✅
 - Robust ETL process with dbt
@@ -55,9 +57,23 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 - **Frontend**: Streamlit (Python)
 - **Data Processing**: dbt (Data Build Tool)
 - **Database**: DuckDB
-- **Analysis**: Pandas, Plotly, NumPy, Scikit-learn
+- **Analysis**: Pandas, Plotly, Altair, NumPy, Scikit-learn
 - **Testing**: Comprehensive dbt tests
 - **Deployment**: Streamlit Cloud
+
+## 🎨 Design System
+
+### **Color Standardization**
+- **Monochrome Pastel Palette**: Easy-on-the-eyes blue-grey tones
+- **Comparison Colors**: Distinct colors for multi-category charts
+- **Heat Maps**: Standardized color schemes for performance metrics
+- **Accessibility**: Optimized for extended dashboard use
+
+### **Visualization Standards**
+- **Smooth Line Charts**: Altair and Plotly with optimized styling
+- **Full-Width Charts**: Responsive design for better data presentation
+- **Consistent Styling**: Standardized colors and formatting across all pages
+- **Mobile Optimization**: Responsive layouts for all screen sizes
 
 ## 🏗️ Architecture
 
@@ -75,6 +91,7 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 │   ├── Home.py              # Main dashboard entry point
 │   ├── 📁 pages/            # Multi-page navigation
 │   ├── data_connector.py    # Database connection logic
+│   ├── color_config.py      # Centralized color configuration
 │   └── portfolio.duckdb     # Production database
 ├── 📁 src/                   # Python analysis modules
 │   └── 📁 packagingco_insights/
@@ -137,6 +154,7 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 
 ### **Financial Performance**
 - **Revenue Trends**: Growth and regional analysis
+- **Revenue Efficiency**: Revenue per transaction by product line
 - **Profit Margins**: Gross and net profitability
 - **Cost Optimization**: Efficiency and waste reduction
 - **Market Performance**: Segment and product analysis
@@ -160,6 +178,7 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 - **Cost Optimization**: Identify efficiency opportunities
 - **Strategic Planning**: Forecast trends and plan initiatives
 - **Stakeholder Communication**: Clear, visual reporting
+- **Visual Consistency**: Professional, standardized dashboard design
 
 ## 🧪 Data Quality & Testing
 
@@ -178,8 +197,23 @@ This project demonstrates:
 - **Business intelligence** development with real-world applications
 - **Sustainability analytics** - a rapidly growing field in business technology
 - **Production-ready architecture** suitable for enterprise deployment
+- **Professional design system** with standardized colors and visualizations
 
 Perfect for showcasing data engineering, business intelligence, and sustainability technology skills!
+
+## 🔄 Recent Updates
+
+### **Visual Design Improvements**
+- **Color Standardization**: Implemented centralized color configuration
+- **Chart Enhancements**: Updated revenue efficiency metrics and regional visualizations
+- **Responsive Design**: Full-width charts and mobile optimization
+- **Smooth Visualizations**: Altair and Plotly with optimized styling
+
+### **Functional Enhancements**
+- **Revenue Efficiency Analysis**: New metrics for revenue per transaction
+- **Regional Performance**: Full-width horizontal bar charts for better data presentation
+- **Cross-Functional Analysis**: Enhanced integration between financial and ESG metrics
+- **Performance Optimization**: Improved data loading and caching
 
 ## 🤝 Contributing
 

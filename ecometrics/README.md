@@ -5,7 +5,7 @@ A comprehensive Streamlit-based business intelligence dashboard that combines en
 ## 🚀 Features
 
 ### 📊 Dashboard Pages
-- **Home**: Overview and navigation hub
+- **Home**: Overview and navigation hub with cross-functional analysis
 - **ESG Insights**: Sustainability metrics and environmental impact analysis
 - **Financial Analysis**: Revenue, profitability, and financial performance metrics
 - **Supply Chain Insights**: Inventory management and logistics optimization
@@ -13,18 +13,24 @@ A comprehensive Streamlit-based business intelligence dashboard that combines en
 - **Data Browser**: Interactive data exploration and dbt model browser
 - **Forecasting**: Advanced forecasting models for business planning
 
+### 🎨 Design System
+- **Standardized Color Palette**: Monochrome pastel scheme with comparison colors
+- **Responsive Design**: Mobile-friendly interface with consistent styling
+- **Smooth Visualizations**: Altair and Plotly charts with optimized styling
+- **Accessibility**: Easy-on-the-eyes color scheme for extended use
+
 ### 🛠️ Technology Stack
 - **Frontend**: Streamlit (latest multipage app structure)
 - **Data Processing**: dbt (data build tool)
 - **Analytics**: Python (pandas, numpy, scikit-learn)
-- **Visualization**: Plotly, Matplotlib, Seaborn
+- **Visualization**: Altair, Plotly, Matplotlib, Seaborn
 - **Database**: DuckDB (local file-based database)
 
 ## 📁 Project Structure
 
 ```
 ecometrics/
-├── Home.py                 # Main entry point
+├── Home.py                 # Main entry point with cross-functional analysis
 ├── pages/                  # Multipage app pages
 │   ├── 1_ESG_Insights.py
 │   ├── 2_Financial_Analysis.py
@@ -33,6 +39,7 @@ ecometrics/
 │   ├── 5_Data_Browser.py
 │   └── 6_Forecasting.py
 ├── data_connector.py       # Database connection and dbt integration
+├── color_config.py         # Centralized color configuration
 ├── portfolio.duckdb        # Production database with dbt models
 ├── requirements.txt        # Python dependencies
 ├── prepare_for_deployment.py # Automated deployment preparation
@@ -91,6 +98,27 @@ The app integrates with the existing dbt project and data sources:
   - Contains all processed dbt models
   - Ready for deployment to Streamlit Cloud
 
+## 🎨 Color System
+
+The application uses a standardized color palette for consistent visual design:
+
+### Monochrome Pastel Palette
+- **Primary Colors**: Blue-grey tones for main brand elements
+- **Secondary Colors**: Soft accent colors for supporting elements
+- **Neutral Colors**: Light backgrounds and dark text for readability
+
+### Chart Color Schemes
+- **Single-Metric Charts**: Monochrome pastel colors for clean, focused visuals
+- **Comparison Charts**: Distinct colors for multi-category comparisons
+- **Heat Maps**: Standardized color schemes for performance metrics
+- **Performance Indicators**: Color-coded status indicators
+
+### Color Functions
+- `get_comparison_colors()`: Optimized colors for comparison charts
+- `get_monochrome_colors()`: Pastel colors for single-metric charts
+- `get_heat_colors()`: Standardized heat map color schemes
+- `get_financial_color()`: Domain-specific colors for financial metrics
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -144,17 +172,21 @@ For local development with live dbt integration:
 ## 📈 Current Implementation Status
 
 ### ✅ Completed Features
-- **ESG Analytics**: Full sustainability metrics dashboard
-- **Financial Analysis**: Comprehensive financial reporting
+- **ESG Analytics**: Full sustainability metrics dashboard with standardized colors
+- **Financial Analysis**: Comprehensive financial reporting with updated charts
+  - Revenue Efficiency by Product Line (revenue per transaction)
+  - Full-width horizontal bar charts for regional data
+  - Smooth line charts with pastel color schemes
 - **Supply Chain Insights**: Complete supply chain optimization
 - **Customer Insights**: Advanced customer analytics
 - **Data Browser**: Interactive dbt model exploration
 - **Forecasting**: Advanced time series forecasting
 - **Responsive Design**: Mobile-friendly interface
 - **Data Quality**: 105+ automated tests
+- **Color Standardization**: Consistent monochrome pastel palette across all pages
 
 ### 🎯 Key Capabilities
-- Real-time data visualization with Plotly
+- Real-time data visualization with Altair and Plotly
 - Multi-dimensional filtering and drill-down
 - Export capabilities for reports
 - Comprehensive ESG and financial metrics
@@ -162,6 +194,13 @@ For local development with live dbt integration:
 - Customer segmentation and analysis
 - Advanced forecasting models
 - Production-ready data pipeline
+- Standardized visual design system
+
+### 📊 Recent Updates
+- **Color Standardization**: Implemented centralized color configuration
+- **Chart Improvements**: Updated revenue efficiency metrics and regional visualizations
+- **Visual Consistency**: Applied monochrome pastel scheme across all pages
+- **Enhanced UX**: Improved chart readability and mobile responsiveness
 
 ## 🤝 Contributing
 

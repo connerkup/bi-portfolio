@@ -3,6 +3,29 @@ import pandas as pd
 import altair as alt
 import plotly.express as px
 from data_connector import load_supply_chain_data
+from color_config import (
+    CSS_COLORS, get_comparison_colors, get_performance_color, 
+    get_heat_colors, get_monochrome_colors, get_financial_color, get_sustainability_color
+)
+
+# Helper functions for formatting
+def format_large_number(value):
+    if value >= 1_000_000_000:
+        return f"${value/1_000_000_000:.1f}B"
+    elif value >= 1_000_000:
+        return f"${value/1_000_000:.1f}M"
+    elif value >= 1_000:
+        return f"${value/1_000:.0f}K"
+    else:
+        return f"${value:.0f}"
+
+def format_count(value):
+    if value >= 1_000_000:
+        return f"{value/1_000_000:.1f}M"
+    elif value >= 1_000:
+        return f"{value/1_000:.0f}K"
+    else:
+        return f"{value:,.0f}"
 
 st.set_page_config(
     page_title="Supply Chain Insights - EcoMetrics",
@@ -171,29 +194,29 @@ else:
 
 with col1:
     st.metric(
-        label="Total Orders",
-        value=f"{total_orders:,}" if total_orders > 0 else "No data",
+        label="📦 Orders",
+        value=format_count(total_orders) if total_orders > 0 else "No data",
         help="Total number of orders placed"
     )
 
 with col2:
     st.metric(
-        label="Total Order Value ($)",
-        value=f"${total_order_value:,.0f}" if total_order_value > 0 else "No data",
+        label="💰 Order Value",
+        value=format_large_number(total_order_value) if total_order_value > 0 else "No data",
         help="Total value of all orders"
     )
 
 with col3:
     st.metric(
-        label="On-Time Delivery Rate (%)",
+        label="⏰ On-Time Rate",
         value=f"{on_time_delivery_rate:.1f}%" if on_time_delivery_rate > 0 else "No data",
         help="Percentage of orders delivered on time"
     )
 
 with col4:
     st.metric(
-        label="Avg. Supplier Reliability",
-        value=f"{avg_supplier_reliability:.3f}" if avg_supplier_reliability > 0 else "No data",
+        label="🏭 Reliability",
+        value=f"{avg_supplier_reliability:.2f}" if avg_supplier_reliability > 0 else "No data",
         help="Average supplier reliability score"
     )
 
@@ -261,7 +284,7 @@ if not filtered_data.empty:
         with col1:
             # Order value trends
             value_chart = alt.Chart(order_trends).mark_line(
-                color='#FF6B6B',
+                color=get_financial_color('revenue'),
                 strokeWidth=3,
                 point=True
             ).encode(
@@ -275,7 +298,7 @@ if not filtered_data.empty:
                 title='Order Value Trends Over Time',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -285,7 +308,7 @@ if not filtered_data.empty:
         with col2:
             # Unit cost trends
             cost_chart = alt.Chart(order_trends).mark_line(
-                color='#4ECDC4',
+                color=get_financial_color('cost'),
                 strokeWidth=3,
                 point=True
             ).encode(
@@ -299,7 +322,7 @@ if not filtered_data.empty:
                 title='Unit Cost Trends Over Time',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -327,7 +350,18 @@ if not filtered_data.empty:
         # Calculate on-time delivery percentage
         supplier_performance['on_time_delivery_pct'] = supplier_performance['on_time_delivery'] * 100
         
-        # Create supplier performance bubble chart
+        # Calculate dynamic axis domains with 10% padding
+        min_x = supplier_performance['supplier_reliability'].min()
+        max_x = supplier_performance['supplier_reliability'].max()
+        x_padding = (max_x - min_x) * 0.1 if max_x > min_x else 0.1
+        x_domain = [max(0, min_x - x_padding), min(1, max_x + x_padding)]
+
+        min_y = supplier_performance['on_time_delivery_pct'].min()
+        max_y = supplier_performance['on_time_delivery_pct'].max()
+        y_padding = (max_y - min_y) * 0.1 if max_y > min_y else 1
+        y_domain = [max(0, min_y - y_padding), min(100, max_y + y_padding)]
+
+        # Create supplier performance bubble chart with dynamic axis domains
         supplier_chart = alt.Chart(supplier_performance).mark_circle(
             opacity=0.8,
             stroke='#cccccc',
@@ -335,12 +369,14 @@ if not filtered_data.empty:
         ).encode(
             x=alt.X('supplier_reliability:Q', 
                     title='Supplier Reliability',
+                    scale=alt.Scale(domain=x_domain),
                     axis=alt.Axis(labelAngle=0)),
             y=alt.Y('on_time_delivery_pct:Q', 
-                    title='On-Time Delivery Rate (%)'),
+                    title='On-Time Delivery Rate (%)',
+                    scale=alt.Scale(domain=y_domain)),
             size=alt.Size('order_value:Q',
                           title='Order Value ($)',
-                          scale=alt.Scale(range=[100, 1000])),
+                          scale=alt.Scale(range=[300, 2500])),
             color=alt.Color('sustainability_rating:Q', 
                            title='Sustainability Rating',
                            scale=alt.Scale(scheme='viridis')),
@@ -353,20 +389,16 @@ if not filtered_data.empty:
             ]
         ).properties(
             title='Supplier Performance: Reliability, Delivery & Sustainability',
-            height=400
+            width=600,
+            height=450
         ).configure_title(
             fontSize=18,
             anchor='start',
             dy=-5
         ).configure_axis(
-            gridColor='#666'
+            gridColor=CSS_COLORS['neutral-dark']
         ).configure_view(
             stroke=None
-        ).configure_legend(
-            orient='right',
-            titleFontSize=12,
-            labelFontSize=11,
-            padding=5
         )
         
         st.altair_chart(supplier_chart, use_container_width=True)
@@ -377,7 +409,7 @@ if not filtered_data.empty:
         with col1:
             # Reliability by supplier
             reliability_chart = alt.Chart(supplier_performance).mark_bar(
-                color='#45B7D1'
+                color=get_performance_color('good')
             ).encode(
                 x=alt.X('supplier_reliability:Q', title='Reliability Score'),
                 y=alt.Y('supplier:N', title='Supplier', sort='-x'),
@@ -389,7 +421,7 @@ if not filtered_data.empty:
                 title='Supplier Reliability Scores',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -397,9 +429,9 @@ if not filtered_data.empty:
             st.altair_chart(reliability_chart, use_container_width=True)
         
         with col2:
-            # Sustainability by supplier
+            # Sustainability by supplier (horizontal bar)
             sustainability_chart = alt.Chart(supplier_performance).mark_bar(
-                color='#4ECDC4'
+                color=get_sustainability_color('recycled')
             ).encode(
                 x=alt.X('sustainability_rating:Q', title='Sustainability Rating'),
                 y=alt.Y('supplier:N', title='Supplier', sort='-x'),
@@ -411,7 +443,7 @@ if not filtered_data.empty:
                 title='Supplier Sustainability Ratings',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -435,12 +467,12 @@ if not filtered_data.empty:
                 'delivery_variance_days': 'mean'
             }).reset_index()
             
-            # Create delivery performance chart
+            # Create delivery performance chart (horizontal bar)
             delivery_chart = alt.Chart(delivery_performance).mark_bar(
-                color='#FFA07A'
+                color=get_performance_color('average')
             ).encode(
-                x=alt.X('delivery_performance:N', title='Delivery Performance'),
-                y=alt.Y('order_value:Q', title='Total Order Value ($)'),
+                y=alt.Y('delivery_performance:N', title='Delivery Performance'),
+                x=alt.X('order_value:Q', title='Total Order Value ($)'),
                 tooltip=[
                     alt.Tooltip('delivery_performance:N', title='Performance'),
                     alt.Tooltip('order_value:Q', title='Order Value ($)', format=',.0f'),
@@ -450,7 +482,7 @@ if not filtered_data.empty:
                 title='Order Value by Delivery Performance',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-dark']
             ).configure_view(
                 strokeWidth=0
             )
@@ -468,12 +500,12 @@ if not filtered_data.empty:
                 variance_data = filtered_data[filtered_data['delivery_variance_days'].notna()]
                 
                 variance_chart = alt.Chart(variance_data).mark_bar(
-                    color='#9B59B6'
+                    color=get_performance_color('average')
                 ).encode(
-                    x=alt.X('delivery_variance_days:Q', 
+                    y=alt.Y('delivery_variance_days:Q', 
                             title='Delivery Variance (days)',
                             bin=alt.Bin(maxbins=20)),
-                    y=alt.Y('count():Q', title='Number of Orders'),
+                    x=alt.X('count():Q', title='Number of Orders'),
                     tooltip=[
                         alt.Tooltip('delivery_variance_days:Q', title='Variance (days)', format='.1f'),
                         alt.Tooltip('count():Q', title='Number of Orders')
@@ -482,7 +514,7 @@ if not filtered_data.empty:
                     title='Distribution of Delivery Variance',
                     height=300
                 ).configure_axis(
-                    gridColor='#f0f0f0'
+                    gridColor=CSS_COLORS['neutral-medium']
                 ).configure_view(
                     strokeWidth=0
                 )
@@ -522,7 +554,7 @@ if not filtered_data.empty:
                     y=alt.Y('days:Q', title='Delivery Days'),
                     color=alt.Color('delivery_type:N', 
                                   title='Delivery Type',
-                                  scale=alt.Scale(range=['#E74C3C', '#27AE60'])),
+                                  scale=alt.Scale(range=[get_performance_color('poor'), get_performance_color('excellent')])),
                     tooltip=[
                         alt.Tooltip('date:T', title='Date', format='%B %Y'),
                         alt.Tooltip('delivery_type:N', title='Type'),
@@ -532,7 +564,7 @@ if not filtered_data.empty:
                     title='Expected vs Actual Delivery Days',
                     height=300
                 ).configure_axis(
-                    gridColor='#f0f0f0'
+                    gridColor=CSS_COLORS['neutral-medium']
                 ).configure_view(
                     strokeWidth=0
                 )
@@ -564,12 +596,12 @@ if not filtered_data.empty:
                 quality_analysis['order_quantity'] * 100
             )
             
-            # Create quality status chart
+            # Create quality status chart (horizontal bar)
             quality_chart = alt.Chart(quality_analysis).mark_bar(
-                color='#E67E22'
+                color=get_performance_color('average')
             ).encode(
-                x=alt.X('quality_status:N', title='Quality Status'),
-                y=alt.Y('order_value:Q', title='Order Value ($)'),
+                y=alt.Y('quality_status:N', title='Quality Status'),
+                x=alt.X('order_value:Q', title='Order Value ($)'),
                 tooltip=[
                     alt.Tooltip('quality_status:N', title='Quality Status'),
                     alt.Tooltip('order_value:Q', title='Order Value ($)', format=',.0f'),
@@ -579,7 +611,7 @@ if not filtered_data.empty:
                 title='Order Value by Quality Status',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -605,7 +637,7 @@ if not filtered_data.empty:
                 )
                 
                 defect_chart = alt.Chart(defect_by_supplier).mark_bar(
-                    color='#E74C3C'
+                    color=get_performance_color('poor')
                 ).encode(
                     x=alt.X('defect_rate_pct:Q', title='Defect Rate (%)'),
                     y=alt.Y('supplier:N', title='Supplier', sort='-x'),
@@ -618,7 +650,7 @@ if not filtered_data.empty:
                     title='Defect Rate by Supplier',
                     height=300
                 ).configure_axis(
-                    gridColor='#f0f0f0'
+                    gridColor=CSS_COLORS['neutral-medium']
                 ).configure_view(
                     strokeWidth=0
                 )
@@ -636,10 +668,10 @@ if not filtered_data.empty:
                 }).reset_index()
                 
                 sustainability_chart = alt.Chart(sustainability_dist).mark_bar(
-                    color='#27AE60'
+                    color=get_sustainability_color('recycled')
                 ).encode(
-                    x=alt.X('sustainability_category:N', title='Sustainability Category'),
-                    y=alt.Y('order_value:Q', title='Order Value ($)'),
+                    y=alt.Y('sustainability_category:N', title='Sustainability Category'),
+                    x=alt.X('order_value:Q', title='Order Value ($)'),
                     tooltip=[
                         alt.Tooltip('sustainability_category:N', title='Category'),
                         alt.Tooltip('order_value:Q', title='Order Value ($)', format=',.0f'),
@@ -649,7 +681,7 @@ if not filtered_data.empty:
                     title='Order Value by Sustainability Category',
                     height=300
                 ).configure_axis(
-                    gridColor='#f0f0f0'
+                    gridColor=CSS_COLORS['neutral-medium']
                 ).configure_view(
                     strokeWidth=0
                 )

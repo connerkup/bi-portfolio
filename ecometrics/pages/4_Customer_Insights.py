@@ -3,6 +3,29 @@ import pandas as pd
 import altair as alt
 import plotly.express as px
 from data_connector import load_finance_data
+from color_config import (
+    CSS_COLORS, get_comparison_colors, get_financial_color, 
+    get_heat_colors, get_monochrome_colors, get_performance_color
+)
+
+# Helper functions for formatting
+def format_large_number(value):
+    if value >= 1_000_000_000:
+        return f"${value/1_000_000_000:.1f}B"
+    elif value >= 1_000_000:
+        return f"${value/1_000_000:.1f}M"
+    elif value >= 1_000:
+        return f"${value/1_000:.0f}K"
+    else:
+        return f"${value:.0f}"
+
+def format_count(value):
+    if value >= 1_000_000:
+        return f"{value/1_000_000:.1f}M"
+    elif value >= 1_000:
+        return f"{value/1_000:.0f}K"
+    else:
+        return f"{value:,.0f}"
 
 st.set_page_config(
     page_title="Customer Insights - EcoMetrics",
@@ -106,29 +129,29 @@ else:
 
 with col1:
     st.metric(
-        label="Customer Segments",
+        label="👥 Segments",
         value=f"{total_customers}" if total_customers > 0 else "No data",
         help="Number of unique customer segments"
     )
 
 with col2:
     st.metric(
-        label="Total Revenue ($)",
-        value=f"${total_revenue:,.0f}" if total_revenue > 0 else "No data",
+        label="💰 Revenue",
+        value=format_large_number(total_revenue) if total_revenue > 0 else "No data",
         help="Total revenue from all customer segments"
     )
 
 with col3:
     st.metric(
-        label="Avg. Profit Margin (%)",
+        label="📈 Margin %",
         value=f"{avg_profit_margin_pct:.1f}%" if avg_profit_margin_pct > 0 else "No data",
         help="Average profit margin across all segments"
     )
 
 with col4:
     st.metric(
-        label="Total Transactions",
-        value=f"{total_transactions:,}" if total_transactions > 0 else "No data",
+        label="🔢 Transactions",
+        value=format_count(total_transactions) if total_transactions > 0 else "No data",
         help="Total number of transactions"
     )
 
@@ -152,6 +175,17 @@ if not filtered_data.empty:
             segment_analysis['total_revenue'] * 100
         )
         
+        # Calculate dynamic axis domains with 10% padding
+        min_x = segment_analysis['total_revenue'].min()
+        max_x = segment_analysis['total_revenue'].max()
+        x_padding = (max_x - min_x) * 0.1 if max_x > min_x else 1
+        x_domain = [max(0, min_x - x_padding), max_x + x_padding]
+
+        min_y = segment_analysis['profit_margin_pct'].min()
+        max_y = segment_analysis['profit_margin_pct'].max()
+        y_padding = (max_y - min_y) * 0.1 if max_y > min_y else 1
+        y_domain = [min_y - y_padding, max_y + y_padding]
+
         # Create customer segment bubble chart
         segment_chart = alt.Chart(segment_analysis).mark_circle(
             opacity=0.8,
@@ -160,12 +194,14 @@ if not filtered_data.empty:
         ).encode(
             x=alt.X('total_revenue:Q', 
                     title='Total Revenue ($)',
+                    scale=alt.Scale(domain=x_domain),
                     axis=alt.Axis(labelAngle=0)),
             y=alt.Y('profit_margin_pct:Q', 
-                    title='Profit Margin (%)'),
+                    title='Profit Margin (%)',
+                    scale=alt.Scale(domain=y_domain)),
             size=alt.Size('total_transactions:Q',
                           title='Number of Transactions',
-                          scale=alt.Scale(range=[100, 1000])),
+                          scale=alt.Scale(range=[300, 2500])),
             color=alt.Color('customer_segment:N', 
                            title='Customer Segment',
                            scale=alt.Scale(scheme='pastel1')),
@@ -177,7 +213,8 @@ if not filtered_data.empty:
             ]
         ).properties(
             title='Customer Segments: Revenue, Profit Margin & Transaction Volume',
-            height=400
+            width=600,
+            height=450
         ).configure_title(
             fontSize=18,
             anchor='start',
@@ -199,12 +236,12 @@ if not filtered_data.empty:
         col1, col2 = st.columns(2)
         
         with col1:
-            # Revenue by customer tier
+            # Revenue by customer tier (horizontal bar)
             tier_revenue = filtered_data.groupby('customer_tier')['total_revenue'].sum().reset_index()
             tier_revenue = tier_revenue.sort_values('total_revenue', ascending=False)
             
             tier_chart = alt.Chart(tier_revenue).mark_bar(
-                color='#FF6B6B'
+                color=get_financial_color('revenue')  # Green for revenue metrics
             ).encode(
                 x=alt.X('total_revenue:Q', title='Total Revenue ($)'),
                 y=alt.Y('customer_tier:N', title='Customer Tier', sort='-x'),
@@ -216,7 +253,7 @@ if not filtered_data.empty:
                 title='Revenue by Customer Tier',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -224,7 +261,7 @@ if not filtered_data.empty:
             st.altair_chart(tier_chart, use_container_width=True)
         
         with col2:
-            # Profit margin by customer tier
+            # Profit margin by customer tier (horizontal bar)
             tier_profit = filtered_data.groupby('customer_tier').agg({
                 'total_revenue': 'sum',
                 'total_profit_margin': 'sum'
@@ -236,10 +273,10 @@ if not filtered_data.empty:
             )
             
             profit_chart = alt.Chart(tier_profit).mark_bar(
-                color='#4ECDC4'
+                color=get_financial_color('profit')  # Blue for profit metrics
             ).encode(
-                x=alt.X('customer_tier:N', title='Customer Tier'),
-                y=alt.Y('profit_margin_pct:Q', title='Profit Margin (%)'),
+                x=alt.X('profit_margin_pct:Q', title='Profit Margin (%)'),
+                y=alt.Y('customer_tier:N', title='Customer Tier', sort='-x'),
                 tooltip=[
                     alt.Tooltip('customer_tier:N', title='Customer Tier'),
                     alt.Tooltip('profit_margin_pct:Q', title='Profit Margin %', format='.1f')
@@ -248,7 +285,7 @@ if not filtered_data.empty:
                 title='Profit Margin by Customer Tier',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -271,11 +308,12 @@ if not filtered_data.empty:
             'avg_unit_price': 'mean'
         }).reset_index()
         
-        # Create Plotly line chart with smooth lines and pastel colors
-        fig_behavior = px.line(
+        # Create Plotly line chart with smooth lines and distinct comparison colors
+        fig_revenue = px.line(
             behavior_trends,
             x='date',
             y='total_revenue',
+            height=800,
             color='customer_segment',
             title='Revenue Trends by Customer Segment',
             labels={
@@ -283,12 +321,12 @@ if not filtered_data.empty:
                 'total_revenue': 'Revenue ($)',
                 'customer_segment': 'Customer Segment'
             },
-            color_discrete_sequence=px.colors.qualitative.Pastel,
-            line_shape='spline'
+            color_discrete_sequence=get_comparison_colors(len(behavior_trends['customer_segment'].unique())),
+            line_shape='spline'  # Smooth lines
         )
         
         # Update layout for better styling
-        fig_behavior.update_layout(
+        fig_revenue.update_layout(
             title_font_size=16,
             plot_bgcolor=None,
             paper_bgcolor=None,
@@ -304,89 +342,103 @@ if not filtered_data.empty:
             margin=dict(l=50, r=50, t=80, b=80)
         )
         
-        # Update traces for better line styling
-        fig_behavior.update_traces(
-            line=dict(width=3),
-            mode='lines+markers',
-            marker=dict(size=6, opacity=0.7)
-        )
-        
         # Update axes styling
-        fig_behavior.update_xaxes(
-            gridcolor='#f0f0f0',
+        fig_revenue.update_xaxes(
+            gridcolor=CSS_COLORS['neutral-medium'],
             showgrid=True,
             zeroline=False
         )
-        fig_behavior.update_yaxes(
-            gridcolor='#f0f0f0',
+        fig_revenue.update_yaxes(
+            gridcolor=CSS_COLORS['neutral-medium'],
             showgrid=True,
             zeroline=False
         )
         
-        st.plotly_chart(fig_behavior, use_container_width=True, theme="streamlit")
+        st.plotly_chart(fig_revenue, use_container_width=True, theme="streamlit")
         
         # Product preferences and transaction analysis
-        col1, col2 = st.columns(2)
+        # Remove columns, stack charts vertically
+        # Revenue by product line for different customer segments
+        product_preferences = filtered_data.groupby(['product_line', 'customer_segment'])['total_revenue'].sum().reset_index()
         
-        with col1:
-            # Revenue by product line for different customer segments
-            product_preferences = filtered_data.groupby(['product_line', 'customer_segment'])['total_revenue'].sum().reset_index()
-            
-            product_chart = alt.Chart(product_preferences).mark_bar().encode(
-                x=alt.X('product_line:N', title='Product Line'),
-                y=alt.Y('total_revenue:Q', title='Revenue ($)'),
-                color=alt.Color('customer_segment:N', 
-                              title='Customer Segment',
-                              scale=alt.Scale(range=['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'])),
-                tooltip=[
-                    alt.Tooltip('product_line:N', title='Product Line'),
-                    alt.Tooltip('customer_segment:N', title='Customer Segment'),
-                    alt.Tooltip('total_revenue:Q', title='Revenue ($)', format=',.0f')
-                ]
-            ).properties(
-                title='Product Preferences by Customer Segment',
-                height=300
-            ).configure_axis(
-                gridColor='#f0f0f0'
-            ).configure_view(
-                strokeWidth=0
-            )
-            
-            st.altair_chart(product_chart, use_container_width=True)
+        product_chart = alt.Chart(product_preferences).mark_bar().encode(
+            x=alt.X('total_revenue:Q', title='Revenue ($)'),
+            y=alt.Y('product_line:N', title='Product Line'),
+            color=alt.Color(
+                'customer_segment:N', 
+                title='Customer Segment',
+                scale=alt.Scale(range=get_comparison_colors(4)),  # Use comparison colors for segments
+                legend=alt.Legend(orient='right')
+            ),
+            tooltip=[
+                alt.Tooltip('product_line:N', title='Product Line'),
+                alt.Tooltip('customer_segment:N', title='Customer Segment'),
+                alt.Tooltip('total_revenue:Q', title='Revenue ($)', format=',.0f')
+            ]
+        ).properties(
+            title='Product Preferences by Customer Segment',
+            height=450
+        ).configure_axis(
+            gridColor=CSS_COLORS['neutral-medium']
+        ).configure_view(
+            strokeWidth=0
+        )
         
-        with col2:
-            # Transaction size analysis
-            transaction_analysis = filtered_data.groupby('customer_segment').agg({
-                'total_transactions': 'sum',
-                'avg_unit_price': 'mean',
-                'total_revenue': 'sum'
-            }).reset_index()
-            
-            transaction_analysis['avg_transaction_value'] = (
-                transaction_analysis['total_revenue'] / 
-                transaction_analysis['total_transactions']
-            )
-            
-            transaction_chart = alt.Chart(transaction_analysis).mark_bar(
-                color='#9B59B6'
-            ).encode(
-                x=alt.X('customer_segment:N', title='Customer Segment'),
-                y=alt.Y('avg_transaction_value:Q', title='Avg. Transaction Value ($)'),
-                tooltip=[
-                    alt.Tooltip('customer_segment:N', title='Customer Segment'),
-                    alt.Tooltip('avg_transaction_value:Q', title='Avg. Transaction Value ($)', format='.2f'),
-                    alt.Tooltip('total_transactions:Q', title='Total Transactions', format=',.0f')
-                ]
-            ).properties(
-                title='Average Transaction Value by Customer Segment',
-                height=300
-            ).configure_axis(
-                gridColor='#f0f0f0'
-            ).configure_view(
-                strokeWidth=0
-            )
-            
-            st.altair_chart(transaction_chart, use_container_width=True)
+        st.altair_chart(product_chart, use_container_width=True)
+
+        # Transaction size analysis
+        transaction_analysis = filtered_data.groupby('customer_segment').agg({
+            'total_transactions': 'sum',
+            'avg_unit_price': 'mean',
+            'total_revenue': 'sum'
+        }).reset_index()
+        
+        transaction_analysis['avg_transaction_value'] = (
+            transaction_analysis['total_revenue'] / 
+            transaction_analysis['total_transactions']
+        )
+        
+        # Average transaction value by segment
+        avg_transaction_chart = alt.Chart(transaction_analysis).mark_bar(
+            color=get_financial_color('revenue')  # Green for revenue metrics
+        ).encode(
+            x=alt.X('avg_transaction_value:Q', title='Average Transaction Value ($)'),
+            y=alt.Y('customer_segment:N', title='Customer Segment', sort='-x'),
+            tooltip=[
+                alt.Tooltip('customer_segment:N', title='Customer Segment'),
+                alt.Tooltip('avg_transaction_value:Q', title='Avg Transaction Value ($)', format='.2f')
+            ]
+        ).properties(
+            title='Average Transaction Value by Customer Segment',
+            height=350
+        ).configure_axis(
+            gridColor=CSS_COLORS['neutral-medium']
+        ).configure_view(
+            strokeWidth=0
+        )
+        
+        st.altair_chart(avg_transaction_chart, use_container_width=True)
+        
+        # Transaction frequency by segment
+        frequency_chart = alt.Chart(transaction_analysis).mark_bar(
+            color=get_financial_color('profit')  # Blue for profit-related metrics
+        ).encode(
+            x=alt.X('total_transactions:Q', title='Total Transactions'),
+            y=alt.Y('customer_segment:N', title='Customer Segment', sort='-x'),
+            tooltip=[
+                alt.Tooltip('customer_segment:N', title='Customer Segment'),
+                alt.Tooltip('total_transactions:Q', title='Total Transactions', format=',.0f')
+            ]
+        ).properties(
+            title='Transaction Frequency by Customer Segment',
+            height=350
+        ).configure_axis(
+            gridColor=CSS_COLORS['neutral-medium']
+        ).configure_view(
+            strokeWidth=0
+        )
+        
+        st.altair_chart(frequency_chart, use_container_width=True)
         
     except Exception as e:
         st.error(f"Error creating customer behavior charts: {e}")
@@ -407,7 +459,7 @@ if not filtered_data.empty:
         
         # Create customer value trend chart
         value_chart = alt.Chart(value_trends).mark_line(
-            color='#45B7D1',
+            color=get_financial_color('margin'),  # Yellow for margin metrics
             strokeWidth=3,
             point=True
         ).encode(
@@ -422,7 +474,7 @@ if not filtered_data.empty:
             title='Customer Profitability Trends Over Time',
             height=300
         ).configure_axis(
-            gridColor='#f0f0f0'
+            gridColor=CSS_COLORS['neutral-medium']
         ).configure_view(
             strokeWidth=0
         )
@@ -433,12 +485,12 @@ if not filtered_data.empty:
         col1, col2 = st.columns(2)
         
         with col1:
-            # Revenue by region
+            # Revenue by region (horizontal bar)
             regional_revenue = filtered_data.groupby('region')['total_revenue'].sum().reset_index()
             regional_revenue = regional_revenue.sort_values('total_revenue', ascending=False)
             
             regional_chart = alt.Chart(regional_revenue).mark_bar(
-                color='#E67E22'
+                color=get_financial_color('growth')  # Teal for growth metrics
             ).encode(
                 x=alt.X('total_revenue:Q', title='Total Revenue ($)'),
                 y=alt.Y('region:N', title='Region', sort='-x'),
@@ -450,7 +502,7 @@ if not filtered_data.empty:
                 title='Revenue by Region',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -466,10 +518,10 @@ if not filtered_data.empty:
             }).reset_index()
             
             market_chart = alt.Chart(market_analysis).mark_bar(
-                color='#8E44AD'
+                color=get_financial_color('profit')  # Blue for profit metrics
             ).encode(
-                x=alt.X('market_type:N', title='Market Type'),
-                y=alt.Y('avg_profit_margin_pct:Q', title='Profit Margin (%)'),
+                x=alt.X('avg_profit_margin_pct:Q', title='Profit Margin (%)'),
+                y=alt.Y('market_type:N', title='Market Type'),
                 tooltip=[
                     alt.Tooltip('market_type:N', title='Market Type'),
                     alt.Tooltip('avg_profit_margin_pct:Q', title='Profit Margin %', format='.1f'),
@@ -479,7 +531,7 @@ if not filtered_data.empty:
                 title='Profit Margin by Market Type',
                 height=300
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -510,10 +562,10 @@ if not filtered_data.empty:
         
         # Create performance chart
         performance_chart = alt.Chart(performance_analysis).mark_bar(
-            color='#27AE60'
+            color=get_performance_color('excellent')  # Green for excellent performance
         ).encode(
-            x=alt.X('performance_category:N', title='Performance Category'),
-            y=alt.Y('profit_margin_pct:Q', title='Profit Margin (%)'),
+            x=alt.X('profit_margin_pct:Q', title='Profit Margin (%)'),
+            y=alt.Y('performance_category:N', title='Performance Category'),
             tooltip=[
                 alt.Tooltip('performance_category:N', title='Performance Category'),
                 alt.Tooltip('profit_margin_pct:Q', title='Profit Margin %', format='.1f'),
@@ -521,9 +573,9 @@ if not filtered_data.empty:
             ]
         ).properties(
             title='Profit Margin by Performance Category',
-            height=300
+            height=500
         ).configure_axis(
-            gridColor='#f0f0f0'
+            gridColor=CSS_COLORS['neutral-medium']
         ).configure_view(
             strokeWidth=0
         )
@@ -546,19 +598,19 @@ if not filtered_data.empty:
             )
             
             star_chart = alt.Chart(star_performer_data).mark_bar(
-                color='#F39C12'
+                color=get_performance_color('good')  # Blue for good performance
             ).encode(
-                x=alt.X('customer_segment:N', title='Customer Segment'),
-                y=alt.Y('star_performer_rate:Q', title='Star Performer Rate (%)'),
+                x=alt.X('star_performer_rate:Q', title='Star Performer Rate (%)'),
+                y=alt.Y('customer_segment:N', title='Customer Segment'),
                 tooltip=[
                     alt.Tooltip('customer_segment:N', title='Customer Segment'),
                     alt.Tooltip('star_performer_rate:Q', title='Star Performer Rate %', format='.1f')
                 ]
             ).properties(
                 title='Star Performer Rate by Customer Segment',
-                height=300
+                height=450
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -578,19 +630,19 @@ if not filtered_data.empty:
             )
             
             premium_chart = alt.Chart(premium_data).mark_bar(
-                color='#E74C3C'
+                color=get_financial_color('revenue')  # Green for revenue metrics
             ).encode(
-                x=alt.X('customer_segment:N', title='Customer Segment'),
-                y=alt.Y('premium_rate:Q', title='Premium High Value Rate (%)'),
+                x=alt.X('premium_rate:Q', title='Premium High Value Rate (%)'),
+                y=alt.Y('customer_segment:N', title='Customer Segment'),
                 tooltip=[
                     alt.Tooltip('customer_segment:N', title='Customer Segment'),
                     alt.Tooltip('premium_rate:Q', title='Premium Rate %', format='.1f')
                 ]
             ).properties(
                 title='Premium High Value Rate by Customer Segment',
-                height=300
+                height=450
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )

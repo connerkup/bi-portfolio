@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
 import streamlit as st
 import pandas as pd
 import altair as alt
@@ -5,6 +8,16 @@ import plotly.express as px
 import numpy as np
 from datetime import datetime, timedelta
 from data_connector import load_finance_data, load_esg_data
+from color_config import (
+    CSS_COLORS, get_comparison_colors, get_financial_color, 
+    get_sustainability_color, get_heat_colors
+)
+
+# Force reload of the forecasting module to get latest methods
+import importlib
+from packagingco_insights.analysis import forecasting
+importlib.reload(forecasting)
+from packagingco_insights.analysis.forecasting import SalesForecaster, DemandForecaster, ESGForecaster, CustomerBehaviorForecaster
 
 st.set_page_config(
     page_title="Forecasting - EcoMetrics",
@@ -37,6 +50,34 @@ if not finance_data.empty:
 if not esg_data.empty:
     st.sidebar.success(f"ESG data: {esg_status}")
 
+# Function to get available models for each forecast type
+def get_available_models(forecast_type: str):
+    """Return available forecasting models for each forecast type."""
+    base_models = [
+        "Exponential Smoothing (Recommended)",
+        "Moving Average (Basic, less accurate)"
+    ]
+    
+    advanced_models = [
+        "Prophet (Advanced, good for trend detection, slower)",
+        "Trend Regression (Trend + Seasonality, business-friendly)"
+    ]
+    
+    if forecast_type == "Revenue Forecasting":
+        # Revenue forecasting has all models implemented
+        return base_models + advanced_models
+    elif forecast_type == "Demand Forecasting":
+        # Demand forecasting has basic models implemented
+        return base_models
+    elif forecast_type == "ESG Impact Forecasting":
+        # ESG forecasting now has multiple models
+        return base_models + advanced_models
+    elif forecast_type == "Customer Behavior Forecasting":
+        # Customer behavior currently has only exponential smoothing
+        return ["Exponential Smoothing (Recommended)"]
+    else:
+        return base_models
+
 # Sidebar controls for forecasting
 with st.sidebar:
     st.markdown("### 🔧 Forecasting Controls")
@@ -56,82 +97,28 @@ with st.sidebar:
         step=3
     )
     
-    # Confidence interval
-    confidence_level = st.slider(
-        "Confidence Level (%)",
-        min_value=80,
-        max_value=99,
-        value=95,
-        step=5
-    )
-    
-    # Model selection
+    # Dynamic model selection based on forecast type
+    available_models = get_available_models(forecast_type)
     model_type = st.selectbox(
         "Forecasting Model",
-        ["Simple Moving Average", "Exponential Smoothing", "Linear Trend", "Seasonal Decomposition"]
+        available_models,
+        index=0  # Default to first available model
     )
-
-# Simple forecasting functions
-def simple_moving_average(data, window=3):
-    """Simple moving average forecast"""
-    if len(data) < window:
-        return data
-    return data.rolling(window=window).mean()
-
-def exponential_smoothing(data, alpha=0.3):
-    """Exponential smoothing forecast"""
-    if len(data) == 0:
-        return data
-    result = [data.iloc[0]]
-    for i in range(1, len(data)):
-        result.append(alpha * data.iloc[i] + (1 - alpha) * result[i-1])
-    return pd.Series(result, index=data.index)
-
-def linear_trend(data):
-    """Linear trend forecast"""
-    if len(data) < 2:
-        return data
-    x = np.arange(len(data))
-    slope, intercept = np.polyfit(x, data, 1)
-    return pd.Series([slope * i + intercept for i in x], index=data.index)
-
-def generate_forecast(data, model_type, horizon):
-    """Generate forecast based on model type"""
-    if data.empty:
-        return pd.DataFrame()
     
-    # Prepare data
-    data_sorted = data.sort_values('date')
-    values = data_sorted['value'].values
-    
-    if model_type == "Simple Moving Average":
-        forecast_values = simple_moving_average(pd.Series(values), window=3)
-    elif model_type == "Exponential Smoothing":
-        forecast_values = exponential_smoothing(pd.Series(values), alpha=0.3)
-    elif model_type == "Linear Trend":
-        forecast_values = linear_trend(pd.Series(values))
-    else:  # Seasonal Decomposition (simplified)
-        forecast_values = simple_moving_average(pd.Series(values), window=4)
-    
-    # Generate future dates
-    last_date = data_sorted['date'].max()
-    future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=horizon, freq='M')
-    
-    # Extend forecast values for future periods
-    if len(forecast_values) > 0:
-        last_value = float(values[-1])  # Use the actual data values, not forecast_values
-        future_values = [last_value * (1 + 0.02 * i) for i in range(1, horizon + 1)]  # Simple growth assumption
-        all_values = list(forecast_values.values) + future_values
-        all_dates = list(data_sorted['date']) + list(future_dates)
+    # Show model availability info
+    if len(available_models) == 1:
+        st.info(f"📊 {forecast_type} currently supports {len(available_models)} model. More models coming soon!")
     else:
-        all_values = values
-        all_dates = data_sorted['date']
-    
-    return pd.DataFrame({
-        'date': all_dates,
-        'value': all_values,
-        'is_forecast': [False] * len(data_sorted) + [True] * horizon
-    })
+        st.success(f"📊 {forecast_type} supports {len(available_models)} models. Choose the best one for your needs!")
+
+# Map dropdown label to internal model name
+model_type_map = {
+    "Exponential Smoothing (Recommended)": "Exponential Smoothing",
+    "Prophet (Advanced, good for trend detection, slower)": "Prophet",
+    "Trend Regression (Trend + Seasonality, business-friendly)": "Trend Regression",
+    "Moving Average (Basic, less accurate)": "Simple Moving Average"
+}
+selected_model_type = model_type_map[model_type]
 
 # Revenue Forecasting Section
 if forecast_type == "Revenue Forecasting":
@@ -139,144 +126,93 @@ if forecast_type == "Revenue Forecasting":
     
     if not finance_data.empty:
         try:
-            # Prepare revenue data
-            revenue_data = finance_data.groupby('date')['total_revenue'].sum().reset_index()
-            revenue_data['value'] = revenue_data['total_revenue']
-            
-            # Generate forecast
-            forecast_result = generate_forecast(revenue_data, model_type, forecast_horizon)
-            
-            if not forecast_result.empty:
-                # Create forecast chart
-                fig_revenue = px.line(
-                    forecast_result,
-                    x='date',
-                    y='value',
-                    color='is_forecast',
-                    title=f'Revenue Forecast - {model_type} Model ({forecast_horizon} months)',
-                    labels={
-                        'date': 'Date',
-                        'value': 'Revenue ($)',
-                        'is_forecast': 'Forecast'
-                    },
-                    color_discrete_sequence=['#4ECDC4', '#FF6B6B'],
-                    line_shape='spline'
+            # Prepare data for SalesForecaster
+            if all(col in finance_data.columns for col in ["date", "total_revenue", "total_units_sold", "product_line"]):
+                sf_data = finance_data.rename(columns={
+                    "total_revenue": "revenue",
+                    "total_units_sold": "units_sold"
+                })
+                sf_data = sf_data[["date", "revenue", "units_sold", "product_line"]]
+            else:
+                st.error("Finance data is missing required columns for advanced forecasting.")
+                st.stop()
+
+            # Instantiate SalesForecaster
+            forecaster = SalesForecaster(sf_data)
+
+            # Select and run the appropriate model
+            forecast_result = None
+            if selected_model_type == "Simple Moving Average":
+                forecast_result = forecaster.moving_average_forecast_wrapper(
+                    periods=forecast_horizon, window=3, group_by="product_line"
                 )
-                
-                # Update layout
-                fig_revenue.update_layout(
-                    title_font_size=16,
-                    plot_bgcolor=None,
-                    paper_bgcolor=None,
-                    font=dict(size=12),
-                    hovermode='x unified',
-                    legend=dict(
-                        orientation="h",
-                        yanchor="top",
-                        y=-0.2,
-                        xanchor="center",
-                        x=0.5
-                    ),
-                    margin=dict(l=50, r=50, t=80, b=80)
+            elif selected_model_type == "Exponential Smoothing":
+                forecast_result = forecaster.exponential_smoothing_forecast(
+                    periods=forecast_horizon, group_by="product_line"
                 )
-                
-                fig_revenue.update_traces(
-                    line=dict(width=3),
-                    mode='lines+markers',
-                    marker=dict(size=6, opacity=0.7)
-                )
-                
-                fig_revenue.update_xaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                fig_revenue.update_yaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                
-                st.plotly_chart(fig_revenue, use_container_width=True, theme="streamlit")
-                
-                # Revenue forecast metrics
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    current_revenue = revenue_data['total_revenue'].iloc[-1] if len(revenue_data) > 0 else 0
-                    st.metric(
-                        label="Current Monthly Revenue",
-                        value=f"${current_revenue:,.0f}" if current_revenue > 0 else "No data"
+            elif selected_model_type == "Prophet":
+                try:
+                    forecast_result = forecaster.prophet_forecast_wrapper(
+                        periods=forecast_horizon, group_by="product_line"
                     )
-                
-                with col2:
-                    if len(forecast_result) > len(revenue_data):
-                        forecast_revenue = forecast_result.iloc[-1]['value']
-                        st.metric(
-                            label=f"Forecasted Revenue ({forecast_horizon} months)",
-                            value=f"${forecast_revenue:,.0f}" if forecast_revenue > 0 else "No data"
-                        )
-                    else:
-                        st.metric(
-                            label="Forecasted Revenue",
-                            value="Insufficient data"
-                        )
-                
-                with col3:
-                    if len(forecast_result) > len(revenue_data) and current_revenue > 0:
-                        growth_rate = ((forecast_revenue - current_revenue) / current_revenue) * 100
-                        st.metric(
-                            label="Projected Growth Rate",
-                            value=f"{growth_rate:.1f}%"
-                        )
-                    else:
-                        st.metric(
-                            label="Projected Growth Rate",
-                            value="N/A"
-                        )
-                
-                # Revenue by segment forecast
-                st.markdown("#### 📊 Revenue Forecast by Segment")
-                
-                segment_forecasts = []
-                for segment in finance_data['customer_segment'].unique():
-                    segment_data = finance_data[finance_data['customer_segment'] == segment]
-                    segment_revenue = segment_data.groupby('date')['total_revenue'].sum().reset_index()
-                    segment_revenue['value'] = segment_revenue['total_revenue']
-                    
-                    segment_forecast = generate_forecast(segment_revenue, model_type, forecast_horizon)
-                    if not segment_forecast.empty:
-                        segment_forecast['segment'] = segment
-                        segment_forecasts.append(segment_forecast)
-                
-                if segment_forecasts:
-                    combined_forecasts = pd.concat(segment_forecasts, ignore_index=True)
-                    
-                    segment_chart = alt.Chart(combined_forecasts).mark_line(
-                        strokeWidth=2,
-                        point=True
-                    ).encode(
-                        x=alt.X('date:T', title='Date', axis=alt.Axis(format='%b %Y')),
-                        y=alt.Y('value:Q', title='Revenue ($)'),
-                        color=alt.Color('segment:N', title='Customer Segment'),
-                        strokeDash=alt.StrokeDash('is_forecast:N', title='Forecast'),
-                        tooltip=[
-                            alt.Tooltip('date:T', title='Date', format='%B %Y'),
-                            alt.Tooltip('segment:N', title='Segment'),
-                            alt.Tooltip('value:Q', title='Revenue ($)', format=',.0f'),
-                            alt.Tooltip('is_forecast:N', title='Is Forecast')
-                        ]
-                    ).properties(
-                        title='Revenue Forecast by Customer Segment',
-                        height=400
-                    ).configure_axis(
-                        gridColor='#f0f0f0'
-                    ).configure_view(
-                        strokeWidth=0
+                except Exception as e:
+                    st.error(f"Prophet model error: {e}")
+                    st.stop()
+            elif selected_model_type == "Trend Regression":
+                try:
+                    forecast_result = forecaster.trend_regression_forecast_wrapper(
+                        periods=forecast_horizon, group_by="product_line"
                     )
-                    
-                    st.altair_chart(segment_chart, use_container_width=True)
-        
+                except Exception as e:
+                    st.error(f"Trend Regression model error: {e}")
+                    st.stop()
+            else:
+                st.error("Unknown model type selected.")
+                st.stop()
+
+            # Plot the forecast
+            st.plotly_chart(forecast_result["forecast_plot"], use_container_width=True)
+
+            # Show metrics
+            metrics = forecast_result.get("metrics", {})
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("MAE", f"${metrics.get('mae', 0):,.0f}")
+            with col2:
+                st.metric("RMSE", f"${metrics.get('rmse', 0):,.0f}")
+            with col3:
+                st.metric("MAPE", f"{metrics.get('mape', 0):.1f}%")
+
+            # Show insights
+            insights = forecaster.generate_insights(forecast_result)
+            st.markdown("#### 📊 Forecast Insights")
+            for k, v in insights.items():
+                st.write(f"- {v}")
+
+            # Add real backtest metrics section after main forecast
+            st.markdown("---")
+            st.markdown("### 🤖 Model Backtest & Comparison")
+            with st.spinner("Running model backtest..."):
+                try:
+                    # Use the same sf_data as above
+                    backtest_forecaster = SalesForecaster(sf_data)
+                    comparison_results = backtest_forecaster.compare_forecasting_models(
+                        periods=forecast_horizon,
+                        group_by="product_line",
+                        test_size=0.2
+                    )
+                    metrics = comparison_results.get("performance_metrics", None)
+                    if metrics is not None and not metrics.empty:
+                        st.markdown("#### Model Performance (Backtest)")
+                        st.dataframe(
+                            metrics.groupby('model')[['mae', 'rmse', 'mape']].mean().round(2),
+                            use_container_width=True
+                        )
+                        st.info("Lower MAE, RMSE, and MAPE indicate better forecasting accuracy. Exponential Smoothing is recommended for most business cases. Prophet is good for trend detection but may be slower.")
+                    else:
+                        st.warning("No backtest metrics available. Forecast accuracy cannot be guaranteed.")
+                except Exception as e:
+                    st.error(f"Error running model comparison: {e}")
         except Exception as e:
             st.error(f"Error creating revenue forecast: {e}")
     else:
@@ -288,102 +224,70 @@ elif forecast_type == "Demand Forecasting":
     
     if not finance_data.empty:
         try:
-            # Prepare demand data (using units sold as proxy for demand)
-            demand_data = finance_data.groupby('date')['total_units_sold'].sum().reset_index()
-            demand_data['value'] = demand_data['total_units_sold']
-            
-            # Generate forecast
-            forecast_result = generate_forecast(demand_data, model_type, forecast_horizon)
-            
-            if not forecast_result.empty:
-                # Create demand forecast chart
-                fig_demand = px.line(
-                    forecast_result,
-                    x='date',
-                    y='value',
-                    color='is_forecast',
-                    title=f'Demand Forecast - {model_type} Model ({forecast_horizon} months)',
-                    labels={
-                        'date': 'Date',
-                        'value': 'Units Sold',
-                        'is_forecast': 'Forecast'
-                    },
-                    color_discrete_sequence=['#45B7D1', '#FFA07A'],
-                    line_shape='spline'
+            # Prepare data for DemandForecaster
+            if all(col in finance_data.columns for col in ["date", "total_units_sold"]):
+                demand_data = finance_data.rename(columns={
+                    "total_units_sold": "units_sold"
+                })
+                if 'product_line' in finance_data.columns:
+                    demand_data = demand_data[["date", "units_sold", "product_line"]]
+                else:
+                    demand_data = demand_data[["date", "units_sold"]]
+            else:
+                st.error("Finance data is missing required columns for demand forecasting.")
+                st.stop()
+
+            # Instantiate DemandForecaster
+            demand_forecaster = DemandForecaster(demand_data)
+
+            # Generate demand forecast using selected model
+            forecast_result = None
+            if selected_model_type == "Simple Moving Average":
+                forecast_result = demand_forecaster.moving_average_forecast_wrapper(
+                    periods=forecast_horizon, window=3, group_by="product_line"
                 )
-                
-                # Update layout
-                fig_demand.update_layout(
-                    title_font_size=16,
-                    plot_bgcolor=None,
-                    paper_bgcolor=None,
-                    font=dict(size=12),
-                    hovermode='x unified',
-                    legend=dict(
-                        orientation="h",
-                        yanchor="top",
-                        y=-0.2,
-                        xanchor="center",
-                        x=0.5
-                    ),
-                    margin=dict(l=50, r=50, t=80, b=80)
+            elif selected_model_type == "Exponential Smoothing":
+                forecast_result = demand_forecaster.exponential_smoothing_forecast(
+                    periods=forecast_horizon, group_by="product_line"
                 )
+            else:
+                st.error("Model not yet implemented for demand forecasting.")
+                st.stop()
+
+            # Plot the forecast
+            st.plotly_chart(forecast_result["forecast_plot"], use_container_width=True)
+
+            # Show metrics
+            metrics = forecast_result.get("metrics", {})
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("MAE", f"{metrics.get('mae', 0):,.0f} units")
+            with col2:
+                st.metric("RMSE", f"{metrics.get('rmse', 0):,.0f} units")
+            with col3:
+                st.metric("MAPE", f"{metrics.get('mape', 0):.1f}%")
+
+            # Show insights
+            forecast_data = forecast_result.get("forecast_data", pd.DataFrame())
+            if not forecast_data.empty:
+                total_demand = forecast_data['forecasted_demand'].sum()
+                avg_monthly_demand = forecast_data.groupby('product_line')['forecasted_demand'].mean()
                 
-                fig_demand.update_traces(
-                    line=dict(width=3),
-                    mode='lines+markers',
-                    marker=dict(size=6, opacity=0.7)
-                )
+                st.markdown("#### 📊 Demand Forecast Insights")
+                st.write(f"- **Total forecasted demand:** {total_demand:,.0f} units over {forecast_horizon} months")
+                if not avg_monthly_demand.empty:
+                    top_demand_product = avg_monthly_demand.idxmax()
+                    st.write(f"- **Highest demand product:** {top_demand_product} ({avg_monthly_demand.max():,.0f} units/month avg)")
                 
-                fig_demand.update_xaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                fig_demand.update_yaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                
-                st.plotly_chart(fig_demand, use_container_width=True, theme="streamlit")
-                
-                # Demand forecast metrics
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    current_demand = demand_data['total_units_sold'].iloc[-1] if len(demand_data) > 0 else 0
-                    st.metric(
-                        label="Current Monthly Demand",
-                        value=f"{current_demand:,.0f}" if current_demand > 0 else "No data"
-                    )
-                
-                with col2:
-                    if len(forecast_result) > len(demand_data):
-                        forecast_demand = forecast_result.iloc[-1]['value']
-                        st.metric(
-                            label=f"Forecasted Demand ({forecast_horizon} months)",
-                            value=f"{forecast_demand:,.0f}" if forecast_demand > 0 else "No data"
-                        )
-                    else:
-                        st.metric(
-                            label="Forecasted Demand",
-                            value="Insufficient data"
-                        )
-                
-                with col3:
-                    if len(forecast_result) > len(demand_data) and current_demand > 0:
-                        demand_growth = ((forecast_demand - current_demand) / current_demand) * 100
-                        st.metric(
-                            label="Projected Demand Growth",
-                            value=f"{demand_growth:.1f}%"
-                        )
-                    else:
-                        st.metric(
-                            label="Projected Demand Growth",
-                            value="N/A"
-                        )
-        
+                # Growth trend
+                if len(forecast_data) > 1:
+                    first_period_demand = forecast_data[forecast_data['forecast_period'] == 1]['forecasted_demand'].sum()
+                    last_period_demand = forecast_data[forecast_data['forecast_period'] == forecast_data['forecast_period'].max()]['forecasted_demand'].sum()
+                    
+                    if first_period_demand > 0:
+                        demand_growth = ((last_period_demand - first_period_demand) / first_period_demand) * 100
+                        st.write(f"- **Demand growth trend:** {demand_growth:+.1f}% over forecast period")
+
         except Exception as e:
             st.error(f"Error creating demand forecast: {e}")
     else:
@@ -395,137 +299,101 @@ elif forecast_type == "ESG Impact Forecasting":
     
     if not esg_data.empty:
         try:
-            # Prepare ESG data
-            emissions_data = esg_data.groupby('date')['total_emissions_kg_co2'].sum().reset_index()
-            emissions_data['value'] = emissions_data['total_emissions_kg_co2']
+            # Instantiate ESGForecaster with raw ESG data
+            esg_forecaster = ESGForecaster(esg_data)
             
-            # Generate forecast
-            forecast_result = generate_forecast(emissions_data, model_type, forecast_horizon)
+            # Let user select which ESG metric to forecast
+            supported_esg_metrics = [
+                'carbon_emissions', 'waste_generated', 'water_usage', 'renewable_energy_pct',
+                'emissions_kg_co2', 'waste_generated_kg', 'water_usage_liters',
+                'total_emissions_kg_co2', 'total_waste_generated_kg', 'total_water_usage_liters', 'avg_renewable_energy_pct'
+            ]
+            available_metrics = [col for col in esg_data.columns if col in supported_esg_metrics]
             
-            if not forecast_result.empty:
-                # Create ESG forecast chart
-                fig_esg = px.line(
-                    forecast_result,
-                    x='date',
-                    y='value',
-                    color='is_forecast',
-                    title=f'CO2 Emissions Forecast - {model_type} Model ({forecast_horizon} months)',
-                    labels={
-                        'date': 'Date',
-                        'value': 'CO2 Emissions (kg)',
-                        'is_forecast': 'Forecast'
-                    },
-                    color_discrete_sequence=['#4ECDC4', '#FF6B6B'],
-                    line_shape='spline'
+            if available_metrics:
+                selected_metric = st.selectbox(
+                    "Select ESG Metric to Forecast",
+                    available_metrics,
+                    format_func=lambda x: x.replace('_', ' ').title()
                 )
                 
-                # Update layout
-                fig_esg.update_layout(
-                    title_font_size=16,
-                    plot_bgcolor=None,
-                    paper_bgcolor=None,
-                    font=dict(size=12),
-                    hovermode='x unified',
-                    legend=dict(
-                        orientation="h",
-                        yanchor="top",
-                        y=-0.2,
-                        xanchor="center",
-                        x=0.5
-                    ),
-                    margin=dict(l=50, r=50, t=80, b=80)
-                )
-                
-                fig_esg.update_traces(
-                    line=dict(width=3),
-                    mode='lines+markers',
-                    marker=dict(size=6, opacity=0.7)
-                )
-                
-                fig_esg.update_xaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                fig_esg.update_yaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                
-                st.plotly_chart(fig_esg, use_container_width=True, theme="streamlit")
-                
-                # ESG forecast metrics
+                # Generate ESG forecast using selected model
+                forecast_result = None
+                if selected_model_type == "Simple Moving Average":
+                    forecast_result = esg_forecaster.moving_average_forecast_wrapper(
+                        periods=forecast_horizon, window=3, metric=selected_metric
+                    )
+                elif selected_model_type == "Exponential Smoothing":
+                    forecast_result = esg_forecaster.exponential_smoothing_forecast(
+                        periods=forecast_horizon, metric=selected_metric
+                    )
+                elif selected_model_type == "Prophet":
+                    try:
+                        forecast_result = esg_forecaster.prophet_forecast_wrapper(
+                            periods=forecast_horizon, metric=selected_metric
+                        )
+                    except Exception as e:
+                        st.error(f"Prophet model error: {e}")
+                        st.stop()
+                elif selected_model_type == "Trend Regression":
+                    try:
+                        forecast_result = esg_forecaster.trend_regression_forecast_wrapper(
+                            periods=forecast_horizon, metric=selected_metric
+                        )
+                    except Exception as e:
+                        st.error(f"Trend Regression model error: {e}")
+                        st.stop()
+                else:
+                    st.error("Unknown model type selected.")
+                    st.stop()
+
+                # Plot the forecast
+                st.plotly_chart(forecast_result["forecast_plot"], use_container_width=True)
+
+                # Show metrics
+                metrics = forecast_result.get("metrics", {})
                 col1, col2, col3 = st.columns(3)
-                
                 with col1:
-                    current_emissions = emissions_data['total_emissions_kg_co2'].iloc[-1] if len(emissions_data) > 0 else 0
-                    st.metric(
-                        label="Current Monthly Emissions",
-                        value=f"{current_emissions:,.0f} kg" if current_emissions > 0 else "No data"
-                    )
-                
+                    st.metric("MAE", f"{metrics.get('mae', 0):,.2f}")
                 with col2:
-                    if len(forecast_result) > len(emissions_data):
-                        forecast_emissions = forecast_result.iloc[-1]['value']
-                        st.metric(
-                            label=f"Forecasted Emissions ({forecast_horizon} months)",
-                            value=f"{forecast_emissions:,.0f} kg" if forecast_emissions > 0 else "No data"
-                        )
-                    else:
-                        st.metric(
-                            label="Forecasted Emissions",
-                            value="Insufficient data"
-                        )
-                
+                    st.metric("RMSE", f"{metrics.get('rmse', 0):,.2f}")
                 with col3:
-                    if len(forecast_result) > len(emissions_data) and current_emissions > 0:
-                        emissions_change = ((forecast_emissions - current_emissions) / current_emissions) * 100
-                        st.metric(
-                            label="Projected Emissions Change",
-                            value=f"{emissions_change:.1f}%"
-                        )
-                    else:
-                        st.metric(
-                            label="Projected Emissions Change",
-                            value="N/A"
-                        )
-                
-                # Sustainability metrics forecast
-                st.markdown("#### ♻️ Sustainability Metrics Forecast")
-                
-                # Recycled material forecast
-                recycled_data = esg_data.groupby('date')['avg_recycled_material_pct'].mean().reset_index()
-                recycled_data['value'] = recycled_data['avg_recycled_material_pct']
-                
-                recycled_forecast = generate_forecast(recycled_data, model_type, forecast_horizon)
-                
-                if not recycled_forecast.empty:
-                    recycled_chart = alt.Chart(recycled_forecast).mark_line(
-                        strokeWidth=3,
-                        point=True
-                    ).encode(
-                        x=alt.X('date:T', title='Date', axis=alt.Axis(format='%b %Y')),
-                        y=alt.Y('value:Q', title='Recycled Material (%)'),
-                        color=alt.Color('is_forecast:N', 
-                                      title='Forecast',
-                                      scale=alt.Scale(range=['#4ECDC4', '#FF6B6B'])),
-                        tooltip=[
-                            alt.Tooltip('date:T', title='Date', format='%B %Y'),
-                            alt.Tooltip('value:Q', title='Recycled Material %', format='.1f'),
-                            alt.Tooltip('is_forecast:N', title='Is Forecast')
-                        ]
-                    ).properties(
-                        title='Recycled Material Usage Forecast',
-                        height=300
-                    ).configure_axis(
-                        gridColor='#f0f0f0'
-                    ).configure_view(
-                        strokeWidth=0
-                    )
+                    st.metric("MAPE", f"{metrics.get('mape', 0):.1f}%")
+
+                # Show insights
+                forecast_data = forecast_result.get("forecast_data", pd.DataFrame())
+                if not forecast_data.empty:
+                    avg_forecast = forecast_data['forecasted_value'].mean()
+                    latest_actual = esg_data[selected_metric].iloc[-1]
                     
-                    st.altair_chart(recycled_chart, use_container_width=True)
-        
+                    st.markdown("#### 📊 ESG Impact Insights")
+                    st.write(f"- **Current {selected_metric.replace('_', ' ').title()}:** {latest_actual:.2f}")
+                    st.write(f"- **Average forecasted {selected_metric.replace('_', ' ').title()}:** {avg_forecast:.2f}")
+                    
+                    # Calculate improvement trend
+                    if latest_actual > 0:
+                        improvement = ((latest_actual - avg_forecast) / latest_actual) * 100
+                        # Metrics where lower values are better (emissions, waste, water usage)
+                        reduction_metrics = ['carbon_emissions', 'waste_generated', 'water_usage', 'emissions_kg_co2', 'waste_generated_kg', 'water_usage_liters']
+                        
+                        if selected_metric in reduction_metrics:
+                            if improvement > 0:
+                                st.write(f"- **Expected improvement:** {improvement:.1f}% reduction in {selected_metric.replace('_', ' ')}")
+                            else:
+                                st.write(f"- **Expected change:** {abs(improvement):.1f}% increase in {selected_metric.replace('_', ' ')}")
+                        else:
+                            # For metrics where higher values are better (renewable energy)
+                            if improvement < 0:
+                                st.write(f"- **Expected improvement:** {abs(improvement):.1f}% increase in {selected_metric.replace('_', ' ')}")
+                            else:
+                                st.write(f"- **Expected change:** {improvement:.1f}% decrease in {selected_metric.replace('_', ' ')}")
+                
+            else:
+                available_cols = list(esg_data.columns)
+                st.error(f"No suitable ESG metrics found for forecasting.")
+                st.info(f"Expected metrics: emissions_kg_co2, waste_generated_kg, water_usage_liters, renewable_energy_pct, or carbon_emissions, waste_generated, water_usage")
+                st.write(f"Available columns in your ESG data: {available_cols}")
+                
         except Exception as e:
             st.error(f"Error creating ESG forecast: {e}")
     else:
@@ -537,104 +405,75 @@ elif forecast_type == "Customer Behavior Forecasting":
     
     if not finance_data.empty:
         try:
-            # Prepare customer behavior data (using transaction count as proxy)
-            behavior_data = finance_data.groupby('date')['total_transactions'].sum().reset_index()
-            behavior_data['value'] = behavior_data['total_transactions']
+            # Prepare data for CustomerBehaviorForecaster
+            customer_data = finance_data.copy()
             
-            # Generate forecast
-            forecast_result = generate_forecast(behavior_data, model_type, forecast_horizon)
+            # Add revenue column if it has a different name
+            if 'total_revenue' in customer_data.columns and 'revenue' not in customer_data.columns:
+                customer_data['revenue'] = customer_data['total_revenue']
             
-            if not forecast_result.empty:
-                # Create customer behavior forecast chart
-                fig_behavior = px.line(
-                    forecast_result,
-                    x='date',
-                    y='value',
-                    color='is_forecast',
-                    title=f'Customer Transaction Forecast - {model_type} Model ({forecast_horizon} months)',
-                    labels={
-                        'date': 'Date',
-                        'value': 'Number of Transactions',
-                        'is_forecast': 'Forecast'
-                    },
-                    color_discrete_sequence=['#9B59B6', '#E67E22'],
-                    line_shape='spline'
+            # Instantiate CustomerBehaviorForecaster
+            customer_forecaster = CustomerBehaviorForecaster(customer_data)
+            
+            # Let user select which customer metric to forecast
+            available_metrics = [col for col in customer_forecaster.prepared_data.columns 
+                               if col not in ['date', 'month', 'quarter', 'year']]
+            
+            if available_metrics:
+                selected_metric = st.selectbox(
+                    "Select Customer Metric to Forecast",
+                    available_metrics,
+                    format_func=lambda x: x.replace('_', ' ').title()
                 )
                 
-                # Update layout
-                fig_behavior.update_layout(
-                    title_font_size=16,
-                    plot_bgcolor=None,
-                    paper_bgcolor=None,
-                    font=dict(size=12),
-                    hovermode='x unified',
-                    legend=dict(
-                        orientation="h",
-                        yanchor="top",
-                        y=-0.2,
-                        xanchor="center",
-                        x=0.5
-                    ),
-                    margin=dict(l=50, r=50, t=80, b=80)
+                # Generate customer behavior forecast
+                forecast_result = customer_forecaster.exponential_smoothing_forecast(
+                    periods=forecast_horizon, metric=selected_metric
                 )
-                
-                fig_behavior.update_traces(
-                    line=dict(width=3),
-                    mode='lines+markers',
-                    marker=dict(size=6, opacity=0.7)
-                )
-                
-                fig_behavior.update_xaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                fig_behavior.update_yaxes(
-                    gridcolor='#f0f0f0',
-                    showgrid=True,
-                    zeroline=False
-                )
-                
-                st.plotly_chart(fig_behavior, use_container_width=True, theme="streamlit")
-                
-                # Customer behavior forecast metrics
+
+                # Plot the forecast
+                st.plotly_chart(forecast_result["forecast_plot"], use_container_width=True)
+
+                # Show metrics
+                metrics = forecast_result.get("metrics", {})
                 col1, col2, col3 = st.columns(3)
-                
                 with col1:
-                    current_transactions = behavior_data['total_transactions'].iloc[-1] if len(behavior_data) > 0 else 0
-                    st.metric(
-                        label="Current Monthly Transactions",
-                        value=f"{current_transactions:,.0f}" if current_transactions > 0 else "No data"
-                    )
-                
+                    st.metric("MAE", f"{metrics.get('mae', 0):,.0f}")
                 with col2:
-                    if len(forecast_result) > len(behavior_data):
-                        forecast_transactions = forecast_result.iloc[-1]['value']
-                        st.metric(
-                            label=f"Forecasted Transactions ({forecast_horizon} months)",
-                            value=f"{forecast_transactions:,.0f}" if forecast_transactions > 0 else "No data"
-                        )
-                    else:
-                        st.metric(
-                            label="Forecasted Transactions",
-                            value="Insufficient data"
-                        )
-                
+                    st.metric("RMSE", f"{metrics.get('rmse', 0):,.0f}")
                 with col3:
-                    if len(forecast_result) > len(behavior_data) and current_transactions > 0:
-                        transaction_growth = ((forecast_transactions - current_transactions) / current_transactions) * 100
-                        st.metric(
-                            label="Projected Transaction Growth",
-                            value=f"{transaction_growth:.1f}%"
-                        )
-                    else:
-                        st.metric(
-                            label="Projected Transaction Growth",
-                            value="N/A"
-                        )
-        
+                    st.metric("MAPE", f"{metrics.get('mape', 0):.1f}%")
+
+                # Show insights
+                forecast_data = forecast_result.get("forecast_data", pd.DataFrame())
+                if not forecast_data.empty:
+                    avg_forecast = forecast_data['forecasted_value'].mean()
+                    latest_actual = customer_forecaster.prepared_data[selected_metric].iloc[-1]
+                    
+                    st.markdown("#### 📊 Customer Behavior Insights")
+                    st.write(f"- **Current {selected_metric.replace('_', ' ').title()}:** {latest_actual:,.2f}")
+                    st.write(f"- **Average forecasted {selected_metric.replace('_', ' ').title()}:** {avg_forecast:,.2f}")
+                    
+                    # Calculate trend
+                    if latest_actual > 0:
+                        trend = ((avg_forecast - latest_actual) / latest_actual) * 100
+                        if trend > 0:
+                            st.write(f"- **Expected growth:** {trend:.1f}% increase in {selected_metric.replace('_', ' ')}")
+                        else:
+                            st.write(f"- **Expected change:** {abs(trend):.1f}% decrease in {selected_metric.replace('_', ' ')}")
+                    
+                    # Seasonal insights
+                    if len(forecast_data) >= 3:
+                        forecast_values = forecast_data['forecasted_value'].values
+                        volatility = np.std(forecast_values) / np.mean(forecast_values) * 100
+                        st.write(f"- **Forecast volatility:** {volatility:.1f}% (lower is more stable)")
+                
+            else:
+                st.error("No suitable customer metrics found for forecasting.")
+                
         except Exception as e:
             st.error(f"Error creating customer behavior forecast: {e}")
+            st.info("This forecasting type works best with customer transaction data including dates and customer metrics.")
     else:
         st.warning("No financial data available for customer behavior forecasting")
 
@@ -647,9 +486,9 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("**Model Parameters:**")
-    st.write(f"- **Model Type:** {model_type}")
+    st.write(f"- **Model Type:** {selected_model_type}")
     st.write(f"- **Forecast Horizon:** {forecast_horizon} months")
-    st.write(f"- **Confidence Level:** {confidence_level}%")
+
     
     # Model accuracy metrics (placeholder)
     st.markdown("**Model Performance:**")
@@ -664,52 +503,109 @@ with col2:
     st.write("- No major external disruptions")
     st.write("- Business conditions remain stable")
     
-    # Confidence intervals
-    st.markdown("**Confidence Intervals:**")
-    st.write(f"- **Upper Bound:** +{confidence_level-80}% from forecast")
-    st.write(f"- **Lower Bound:** -{confidence_level-80}% from forecast")
 
-# Scenario Analysis
+
+# Generate scenarios using centralized forecasting logic
+scenarios = None
+active_forecaster = None
+
+# Determine which forecaster to use for scenario generation
+if forecast_type == "Revenue Forecasting" and 'forecaster' in locals():
+    active_forecaster = forecaster
+elif forecast_type == "Demand Forecasting" and 'demand_forecaster' in locals():
+    active_forecaster = demand_forecaster
+elif forecast_type == "ESG Impact Forecasting" and 'esg_forecaster' in locals():
+    active_forecaster = esg_forecaster
+elif forecast_type == "Customer Behavior Forecasting" and 'customer_forecaster' in locals():
+    active_forecaster = customer_forecaster
+
+if active_forecaster:
+    try:
+        scenarios = active_forecaster.generate_dynamic_scenarios(
+            forecast_type=forecast_type,
+            forecast_horizon=forecast_horizon,
+            forecast_result=locals().get('forecast_result', None),
+            model_type=selected_model_type
+        )
+    except AttributeError as e:
+        # Fallback to SalesForecaster if method not available in other forecasters
+        if forecast_type == "Revenue Forecasting" and 'forecaster' in locals():
+            try:
+                scenarios = forecaster.generate_dynamic_scenarios(
+                    forecast_type=forecast_type,
+                    forecast_horizon=forecast_horizon,
+                    forecast_result=locals().get('forecast_result', None),
+                    model_type=selected_model_type
+                )
+            except Exception as e2:
+                st.error(f"Error generating scenarios: {e2}")
+                scenarios = None
+        else:
+            st.warning(f"Dynamic scenarios are not yet available for {forecast_type}. Using default scenarios.")
+            scenarios = None
+    except Exception as e:
+        st.error(f"Error generating scenarios: {e}")
+        scenarios = None
+
 st.markdown("---")
-st.markdown("### 📊 Scenario Analysis")
+st.markdown("### 📊 Dynamic Scenario Analysis")
+st.markdown(f"*Based on {forecast_type.lower()} over {forecast_horizon} months using {selected_model_type}*")
 
-scenario_col1, scenario_col2, scenario_col3 = st.columns(3)
+if scenarios and '_metadata' in scenarios:
+    scenario_col1, scenario_col2, scenario_col3 = st.columns(3)
 
-with scenario_col1:
-    st.markdown("**Optimistic Scenario**")
-    st.write("Best-case conditions:")
-    st.write("- Strong market growth")
-    st.write("- Increased customer demand")
-    st.write("- Improved efficiency")
-    st.metric(
-        label="Projected Growth",
-        value="+25.0%",
-        delta="+5.0%"
-    )
+    with scenario_col1:
+        st.markdown("**🚀 Optimistic Scenario**")
+        st.write("Best-case conditions:")
+        for condition in scenarios['optimistic']['conditions']:
+            st.write(f"- {condition}")
+        
+        growth_val = scenarios['optimistic']['growth']
+        delta_val = growth_val - scenarios['base']['growth']
+        st.metric(
+            label=f"Projected {scenarios['optimistic']['metric_label']}",
+            value=f"{scenarios['optimistic']['metric_format']}{growth_val:+.1f}%",
+            delta=f"{delta_val:+.1f}%"
+        )
 
-with scenario_col2:
-    st.markdown("**Base Scenario**")
-    st.write("Most likely conditions:")
-    st.write("- Moderate market growth")
-    st.write("- Stable customer demand")
-    st.write("- Current efficiency levels")
-    st.metric(
-        label="Projected Growth",
-        value="+15.0%",
-        delta="0.0%"
-    )
+    with scenario_col2:
+        st.markdown("**📊 Base Scenario**")
+        st.write("Most likely conditions:")
+        for condition in scenarios['base']['conditions']:
+            st.write(f"- {condition}")
+        
+        growth_val = scenarios['base']['growth']
+        st.metric(
+            label=f"Projected {scenarios['base']['metric_label']}",
+            value=f"{scenarios['base']['metric_format']}{growth_val:+.1f}%",
+            delta="0.0%"
+        )
 
-with scenario_col3:
-    st.markdown("**Conservative Scenario**")
-    st.write("Worst-case conditions:")
-    st.write("- Market slowdown")
-    st.write("- Reduced customer demand")
-    st.write("- Efficiency challenges")
-    st.metric(
-        label="Projected Growth",
-        value="+5.0%",
-        delta="-10.0%"
-    )
+    with scenario_col3:
+        st.markdown("**⚠️ Conservative Scenario**")
+        st.write("Challenging conditions:")
+        for condition in scenarios['conservative']['conditions']:
+            st.write(f"- {condition}")
+        
+        growth_val = scenarios['conservative']['growth']
+        delta_val = growth_val - scenarios['base']['growth']
+        st.metric(
+            label=f"Projected {scenarios['conservative']['metric_label']}",
+            value=f"{scenarios['conservative']['metric_format']}{growth_val:+.1f}%",
+            delta=f"{delta_val:+.1f}%"
+        )
+
+    # Scenario Impact Analysis
+    st.markdown("#### 🎯 Scenario Impact Summary")
+    metadata = scenarios['_metadata']
+    st.write(f"""
+    - **Scenario Range:** {metadata['scenario_range']:.1f} percentage points between optimistic and conservative
+    - **Forecast Horizon Impact:** {forecast_horizon}-month horizon {'increases' if forecast_horizon > 12 else 'decreases'} uncertainty
+    - **Model Confidence:** {selected_model_type} provides {metadata['model_confidence']} reliability for {forecast_type.lower()}
+    - **Risk Assessment:** {metadata['risk_level']} volatility expected
+    """)
+else:
+    st.warning("Scenario analysis is only available for Revenue Forecasting. Please select Revenue Forecasting to see dynamic scenarios.")
 
 # Data Summary Section
 st.markdown("---")
@@ -725,7 +621,7 @@ if not finance_data.empty or not esg_data.empty:
         if not esg_data.empty:
             st.write(f"- **ESG Data:** {esg_data['date'].min().strftime('%B %Y')} to {esg_data['date'].max().strftime('%B %Y')}")
         st.write(f"- **Forecast Period:** {forecast_horizon} months")
-        st.write(f"- **Model Type:** {model_type}")
+        st.write(f"- **Model Type:** {selected_model_type}")
     
     with col2:
         st.markdown("**Forecasting Capabilities:**")

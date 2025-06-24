@@ -3,10 +3,42 @@ import pandas as pd
 import altair as alt
 import plotly.express as px
 from data_connector import load_esg_data
+from color_config import (
+    CHART_COLORS, CSS_COLORS, get_comparison_colors, 
+    get_sustainability_color, get_heat_colors, get_monochrome_colors
+)
+
+# Helper functions for formatting
+def format_large_number(value):
+    if value >= 1_000_000_000:
+        return f"${value/1_000_000_000:.1f}B"
+    elif value >= 1_000_000:
+        return f"${value/1_000_000:.1f}M"
+    elif value >= 1_000:
+        return f"${value/1_000:.0f}K"
+    else:
+        return f"${value:.0f}"
+
+def format_emissions(value):
+    if value >= 1_000_000:
+        return f"{value/1_000_000:.1f}M kg"
+    elif value >= 1_000:
+        return f"{value/1_000:.0f}K kg"
+    else:
+        return f"{value:.0f} kg"
+
+def format_weight(value):
+    if value >= 1_000_000:
+        return f"{value/1_000_000:.1f}M kg"
+    elif value >= 1_000:
+        return f"{value/1_000:.0f}K kg"
+    else:
+        return f"{value:.0f} kg"
 
 st.set_page_config(
     page_title="ESG Insights - EcoMetrics",
     page_icon="🌱",
+    layout="centered"
 )
 
 st.title("🌱 ESG Insights")
@@ -99,28 +131,28 @@ else:
 
 with col1:
     st.metric(
-        label="Total CO2 Emissions (kg)",
-        value=f"{total_emissions:,.0f}" if total_emissions > 0 else "No data",
+        label="🌱 CO2 Emissions",
+        value=format_emissions(total_emissions) if total_emissions > 0 else "No data",
         help="Total carbon dioxide emissions across all operations"
     )
 
 with col2:
     st.metric(
-        label="Avg. Recycled Material (%)",
+        label="♻️ Recycled %",
         value=f"{avg_recycled:.1f}%" if avg_recycled > 0 else "No data",
         help="Average percentage of recycled materials used"
     )
 
 with col3:
     st.metric(
-        label="Total Waste Generated (kg)",
-        value=f"{total_waste:,.0f}" if total_waste > 0 else "No data",
+        label="🗑️ Waste Generated",
+        value=format_weight(total_waste) if total_waste > 0 else "No data",
         help="Total waste generated across all operations"
     )
 
 with col4:
     st.metric(
-        label="Avg. Renewable Energy (%)",
+        label="⚡ Renewable Energy",
         value=f"{avg_renewable:.1f}%" if avg_renewable > 0 else "No data",
         help="Average percentage of renewable energy used"
     )
@@ -134,11 +166,12 @@ if not filtered_data.empty:
         # CO2 Emissions by Product Line (Plotly version)
         emissions_by_product = filtered_data.groupby(['date', 'product_line'])['total_emissions_kg_co2'].sum().reset_index()
         
-        # Create Plotly line chart with smooth lines and pastel colors
+        # Create Plotly line chart with smooth lines and distinct comparison colors
         fig_emissions = px.line(
             emissions_by_product,
             x='date',
             y='total_emissions_kg_co2',
+            height=800,
             color='product_line',
             title='CO2 Emissions Over Time by Product Line',
             labels={
@@ -146,7 +179,7 @@ if not filtered_data.empty:
                 'total_emissions_kg_co2': 'CO2 Emissions (kg)',
                 'product_line': 'Product Line'
             },
-            color_discrete_sequence=px.colors.qualitative.Pastel,  # Pastel color palette
+            color_discrete_sequence=get_comparison_colors(len(emissions_by_product['product_line'].unique())),
             line_shape='spline'  # Smooth lines
         )
         
@@ -200,7 +233,7 @@ if not filtered_data.empty:
         
         with col1:
             recycled_chart = alt.Chart(trends_data).mark_line(
-                color='#4ECDC4',
+                color=get_sustainability_color('recycled'),  # Green for recycled materials
                 strokeWidth=3,
                 point=True
             ).encode(
@@ -212,9 +245,9 @@ if not filtered_data.empty:
                 ]
             ).properties(
                 title='Recycled Material Usage Trend',
-                height=250
+                height=350
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -223,7 +256,7 @@ if not filtered_data.empty:
         
         with col2:
             renewable_chart = alt.Chart(trends_data).mark_line(
-                color='#45B7D1',
+                color=get_sustainability_color('renewable'),  # Blue for renewable energy
                 strokeWidth=3,
                 point=True
             ).encode(
@@ -235,9 +268,9 @@ if not filtered_data.empty:
                 ]
             ).properties(
                 title='Renewable Energy Usage Trend',
-                height=250
+                height=350
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -278,13 +311,13 @@ if not filtered_data.empty:
         }
         material_melted['material_type'] = material_melted['material_type'].map(legend_names)
         
-        # Create stacked bar chart
+        # Create stacked bar chart (horizontal)
         material_chart = alt.Chart(material_melted).mark_bar().encode(
-            x=alt.X('product_line:N', title='Product Line', sort='-y'),
-            y=alt.Y('percentage:Q', title='Percentage (%)', stack='zero'),
+            y=alt.Y('product_line:N', title='Product Line', sort='-x'),
+            x=alt.X('percentage:Q', title='Percentage (%)', stack='zero'),
             color=alt.Color('material_type:N', 
                           title='Material Type',
-                          scale=alt.Scale(range=['#4ECDC4', '#FFA07A'])),
+                          scale=alt.Scale(range=[get_sustainability_color('recycled'), get_sustainability_color('waste')])),
             tooltip=[
                 alt.Tooltip('product_line:N', title='Product Line'),
                 alt.Tooltip('material_type:N', title='Material Type'),
@@ -296,7 +329,7 @@ if not filtered_data.empty:
         ).configure_title(
             fontSize=16
         ).configure_axis(
-            gridColor='#f0f0f0'
+            gridColor=CSS_COLORS['neutral-medium']
         ).configure_view(
             strokeWidth=0
         )
@@ -320,23 +353,36 @@ if not filtered_data.empty:
             'overall_water_recycling_pct': 'mean'
         }).reset_index()
         
+        # Calculate dynamic axis domains with 10% padding
+        min_x = facility_data['overall_emissions_per_unit'].min()
+        max_x = facility_data['overall_emissions_per_unit'].max()
+        x_padding = (max_x - min_x) * 0.1 if max_x > min_x else 0.01
+        x_domain = [max(0, min_x - x_padding), max_x + x_padding]
+
+        min_y = facility_data['avg_recycled_material_pct'].min()
+        max_y = facility_data['avg_recycled_material_pct'].max()
+        y_padding = (max_y - min_y) * 0.1 if max_y > min_y else 1
+        y_domain = [max(0, min_y - y_padding), min(100, max_y + y_padding)]
+
         # Create a bubble chart to show multiple dimensions of facility performance
         facility_bubble_chart = alt.Chart(facility_data).mark_circle(
             opacity=0.8,
-            stroke='#cccccc',
+            stroke=CSS_COLORS['neutral-medium'],
             strokeWidth=0.5
         ).encode(
             x=alt.X('overall_emissions_per_unit:Q', 
                     title='Emissions per Unit',
+                    scale=alt.Scale(domain=x_domain),
                     axis=alt.Axis(labelAngle=0)),
             y=alt.Y('avg_recycled_material_pct:Q', 
-                    title='Recycled Material (%)'),
+                    title='Recycled Material (%)',
+                    scale=alt.Scale(domain=y_domain)),
             size=alt.Size('avg_renewable_energy_pct:Q',
                           title='Renewable Energy Use (%)',
-                          scale=alt.Scale(range=[100, 1000])),
+                          scale=alt.Scale(range=[300, 2500])),
             color=alt.Color('facility:N', 
                            title='Facility',
-                           scale=alt.Scale(scheme='pastel1')),
+                           scale=alt.Scale(range=get_comparison_colors(len(facility_data['facility'].unique())))),
             tooltip=[
                 alt.Tooltip('facility:N', title='Facility'),
                 alt.Tooltip('overall_emissions_per_unit:Q', title='Emissions/Unit', format='.3f'),
@@ -345,20 +391,16 @@ if not filtered_data.empty:
             ]
         ).properties(
             title='Facility Performance: Emissions, Recycling & Renewables',
-            height=400
+            width=600,
+            height=450
         ).configure_title(
             fontSize=18,
             anchor='start',
             dy=-5
         ).configure_axis(
-            gridColor='#666'
+            gridColor=CSS_COLORS['neutral-dark']
         ).configure_view(
             stroke=None
-        ).configure_legend(
-            orient='right',
-            titleFontSize=12,
-            labelFontSize=11,
-            padding=5
         )
         
         st.altair_chart(facility_bubble_chart, use_container_width=True)
@@ -382,7 +424,7 @@ if not filtered_data.empty:
         
         # Create horizontal bar chart for regional emissions
         regional_emissions = alt.Chart(regional_data).mark_bar(
-            color='#FF6B6B'
+            color=get_sustainability_color('emissions')  # Red for emissions
         ).encode(
             x=alt.X('total_emissions_kg_co2:Q', title='Total Emissions (kg)'),
             y=alt.Y('facility_region:N', title='Region', sort='-x'),
@@ -392,11 +434,11 @@ if not filtered_data.empty:
             ]
         ).properties(
             title='Total Emissions by Region',
-            height=200
+            height=350
         ).configure_title(
             fontSize=16
         ).configure_axis(
-            gridColor='#f0f0f0'
+            gridColor=CSS_COLORS['neutral-medium']
         ).configure_view(
             strokeWidth=0
         )
@@ -408,7 +450,7 @@ if not filtered_data.empty:
         
         with col1:
             regional_recycled = alt.Chart(regional_data).mark_bar(
-                color='#4ECDC4'
+                color=get_sustainability_color('recycled')  # Green for recycled materials
             ).encode(
                 x=alt.X('avg_recycled_material_pct:Q', title='Recycled Material (%)'),
                 y=alt.Y('facility_region:N', title='Region', sort='-x'),
@@ -418,11 +460,11 @@ if not filtered_data.empty:
                 ]
             ).properties(
                 title='Recycled Material by Region',
-                height=200
+                height=350
             ).configure_title(
                 fontSize=16
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
@@ -431,7 +473,7 @@ if not filtered_data.empty:
         
         with col2:
             regional_renewable = alt.Chart(regional_data).mark_bar(
-                color='#45B7D1'
+                color=get_sustainability_color('renewable')  # Blue for renewable energy
             ).encode(
                 x=alt.X('avg_renewable_energy_pct:Q', title='Renewable Energy (%)'),
                 y=alt.Y('facility_region:N', title='Region', sort='-x'),
@@ -441,11 +483,11 @@ if not filtered_data.empty:
                 ]
             ).properties(
                 title='Renewable Energy by Region',
-                height=200
+                height=350
             ).configure_title(
                 fontSize=16
             ).configure_axis(
-                gridColor='#f0f0f0'
+                gridColor=CSS_COLORS['neutral-medium']
             ).configure_view(
                 strokeWidth=0
             )
