@@ -39,6 +39,47 @@ st.markdown("""
         border-left: 4px solid #1f77b4;
         margin-bottom: 1rem;
     }
+    .creator-card {
+        background: linear-gradient(135deg, rgba(31, 119, 180, 0.1), rgba(69, 183, 209, 0.1));
+        padding: 2rem;
+        border-radius: 15px;
+        border: 2px solid #1f77b4;
+        margin: 2rem 0;
+        text-align: center;
+    }
+    .creator-name {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #1f77b4;
+        margin-bottom: 0.5rem;
+    }
+    .creator-title {
+        font-size: 1.2rem;
+        color: #666;
+        margin-bottom: 1rem;
+    }
+    .creator-description {
+        font-size: 1rem;
+        color: #888;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+    }
+    .portfolio-link {
+        display: inline-block;
+        background-color: #1f77b4;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        text-decoration: none;
+        border-radius: 25px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        margin-top: 1rem;
+    }
+    .portfolio-link:hover {
+        background-color: #45B7D1;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(31, 119, 180, 0.3);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,6 +257,25 @@ with col2:
     }
     </style>
     """, unsafe_allow_html=True)
+
+# Creator Section
+st.markdown("---")
+st.markdown("## 👨‍💻 About the Creator")
+
+st.markdown("""
+<div class="creator-card">
+    <div class="creator-name">👨‍💻 Conner Kupferberg</div>
+    <div class="creator-title">Data Scientist & Business Intelligence Developer</div>
+    <div class="creator-description">
+        Passionate about leveraging data to drive sustainable business decisions and create meaningful insights. 
+        This dashboard showcases expertise in data engineering, analytics, and visualization using modern BI tools 
+        including dbt, Streamlit, and advanced forecasting techniques.
+    </div>
+    <a href="https://connerkupferberg.com" target="_blank" class="portfolio-link">
+        🌐 View My Portfolio
+    </a>
+</div>
+""", unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")

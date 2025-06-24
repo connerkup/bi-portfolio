@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains the data architecture, validation strategies, and real-world considerations for the PackagingCo BI portfolio. It addresses how data flows through the system, validation approaches, and how to handle different data granularities.
+This document explains the data architecture, validation strategies, and real-world considerations for the EcoMetrics BI portfolio. It addresses how data flows through the system, validation approaches, and how to handle different data granularities.
 
 ## Current Data Architecture
 

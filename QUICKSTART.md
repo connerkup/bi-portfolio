@@ -1,6 +1,6 @@
 # 🚀 Quick Start Guide
 
-Get up and running with the PackagingCo BI Portfolio in minutes!
+Get up and running with the EcoMetrics BI Portfolio in minutes!
 
 ## Prerequisites
 
@@ -29,7 +29,8 @@ This will automatically:
 
 ### 3. Start the Dashboard
 ```bash
-streamlit run streamlit_app/app.py
+cd ecometrics
+streamlit run Home.py
 ```
 
 Open your browser to `http://localhost:8501` 🎉
@@ -47,6 +48,7 @@ pip install -e .
 ### 2. Set Up Database
 ```bash
 cd dbt
+dbt deps
 dbt seed
 dbt run
 dbt test
@@ -55,26 +57,30 @@ cd ..
 
 ### 3. Start Dashboard
 ```bash
-streamlit run streamlit_app/app.py
+cd ecometrics
+streamlit run Home.py
 ```
 
 ## What You'll See
 
 ### 📊 Dashboard Pages
-- **Overview**: Executive summary and key metrics
-- **ESG Insights**: Sustainability performance analysis
-- **Financial Analysis**: Revenue, profit, and growth metrics
-- **Forecasting**: Sales projections and trend analysis
-- **Combined Insights**: ESG-Finance integration
+- **Home**: Executive summary and navigation hub
+- **ESG Insights**: Sustainability performance analysis and environmental impact
+- **Financial Analysis**: Revenue, profit, and growth metrics with forecasting
+- **Supply Chain Insights**: Inventory management and operational efficiency
+- **Customer Insights**: Customer behavior analysis and segmentation
 - **Data Browser**: Interactive data exploration with filtering, search, and export capabilities
+- **Forecasting**: Advanced time series forecasting and trend analysis
 
 ### 📈 Key Features
-- Interactive visualizations with Plotly
-- Real-time data filtering
+- Interactive visualizations with Plotly and Altair
+- Real-time data filtering and drill-down capabilities
 - Business insights and recommendations
 - Scenario analysis capabilities
 - Comprehensive data browser with search and export
 - Data quality insights and statistics
+- Responsive design for mobile and desktop
+- Export capabilities for reports and data
 
 ## Exploring the Code
 
@@ -87,17 +93,27 @@ bi-portfolio/
 │       └── utils/          # Data loading & utilities
 ├── dbt/                    # Data transformations
 │   ├── models/            # SQL models
+│   │   ├── finance/       # Financial analysis models
+│   │   ├── sustainability/ # ESG analysis models
+│   │   ├── supply_chain/  # Supply chain models
+│   │   └── customer_insights/ # Customer analysis models
 │   └── seeds/             # Sample data
+├── ecometrics/            # Main Streamlit application
+│   ├── Home.py           # Dashboard entry point
+│   ├── pages/            # Multi-page navigation
+│   ├── data_connector.py # Database connection logic
+│   └── portfolio.duckdb  # Production database
 ├── notebooks/             # Jupyter notebooks
-├── streamlit_app/         # Dashboard application
 └── data/                  # Data files
 ```
 
 ### 🔧 Key Components
 - **ESG Analyzer**: Sustainability metrics and insights
 - **Finance Analyzer**: Financial performance analysis
-- **Sales Forecaster**: Revenue projections
-- **Data Loader**: Database connectivity utilities
+- **Supply Chain Analyzer**: Inventory and operational optimization
+- **Customer Analyzer**: Customer behavior and segmentation
+- **Forecasting Engine**: Advanced time series forecasting
+- **Data Connector**: Database connectivity and dbt integration
 - **Data Browser**: Interactive data exploration and export tools
 
 ## Next Steps
@@ -110,12 +126,25 @@ bi-portfolio/
 ### 🛠️ Development
 - Modify `src/packagingco_insights/` for custom analysis
 - Add new dbt models in `dbt/models/`
-- Extend the dashboard in `streamlit_app/`
+- Extend the dashboard in `ecometrics/`
 
 ### 🚀 Production
 - Use the [Dockerfile](deployment/Dockerfile) for containerization
 - Check the [Airflow DAG](airflow/dag_bi_portfolio.py) for orchestration
-- Deploy to your preferred platform
+- Deploy to Streamlit Cloud using `ecometrics/Home.py`
+
+## Deployment to Streamlit Cloud
+
+### 1. Prepare for Deployment
+```bash
+cd ecometrics
+python prepare_for_deployment.py
+```
+
+### 2. Deploy to Streamlit Cloud
+- Connect your GitHub repository to Streamlit Cloud
+- Set main file to: `ecometrics/Home.py`
+- Set requirements file to: `ecometrics/requirements.txt`
 
 ## Troubleshooting
 
@@ -134,7 +163,7 @@ dbt run
 # Check if port 8501 is available
 lsof -i :8501
 # Or use a different port
-streamlit run streamlit_app/app.py --server.port 8502
+streamlit run Home.py --server.port 8502
 ```
 
 **Import errors**
@@ -145,24 +174,36 @@ pip install -e .
 python -c "import sys; print(sys.path)"
 ```
 
+**Database connection issues**
+```bash
+# Check if database file exists
+ls -la ecometrics/portfolio.duckdb
+# Rebuild database if needed
+cd dbt && dbt run && cd ..
+cp dbt/data/processed/portfolio.duckdb ecometrics/
+```
+
 ### Getting Help
 - Check the [README.md](README.md) for detailed documentation
 - Review error messages in the terminal
 - Ensure all dependencies are installed correctly
+- Check the [Data Browser](http://localhost:8501/Data_Browser) page for database status
 
 ## Business Context
 
 This BI portfolio answers the key question:
-**"How can PackagingCo drive ESG goals without compromising financial health?"**
+**"How can PackagingCo drive ESG goals while optimizing financial performance and supply chain efficiency?"**
 
 The dashboard provides:
-- 🌱 ESG performance tracking
-- 💰 Financial performance analysis
-- 📈 Forecasting and trends
-- 🔄 Integrated insights
+- 🌱 ESG performance tracking and sustainability insights
+- 💰 Financial performance analysis and forecasting
+- 🔄 Supply chain optimization and operational efficiency
+- 👥 Customer behavior analysis and segmentation
+- 📈 Advanced forecasting and trend analysis
+- 🔍 Comprehensive data exploration and export capabilities
 
-Each visualization and metric is designed to support real business decisions around sustainability and profitability.
+Each visualization and metric is designed to support real business decisions around sustainability, profitability, and operational excellence.
 
 ---
 
-**Ready to explore?** Start with the Overview page in the dashboard! 🎯 
+**Ready to explore?** Start with the Home page in the dashboard! 🎯 

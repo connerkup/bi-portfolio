@@ -18,7 +18,7 @@ A comprehensive Streamlit-based business intelligence dashboard that combines en
 - **Data Processing**: dbt (data build tool)
 - **Analytics**: Python (pandas, numpy, scikit-learn)
 - **Visualization**: Plotly, Matplotlib, Seaborn
-- **Database**: PostgreSQL (via dbt)
+- **Database**: DuckDB (local file-based database)
 
 ## 📁 Project Structure
 
@@ -32,7 +32,11 @@ ecometrics/
 │   ├── 4_Customer_Insights.py
 │   ├── 5_Data_Browser.py
 │   └── 6_Forecasting.py
+├── data_connector.py       # Database connection and dbt integration
+├── portfolio.duckdb        # Production database with dbt models
 ├── requirements.txt        # Python dependencies
+├── prepare_for_deployment.py # Automated deployment preparation
+├── STREAMLIT_CLOUD_DEPLOYMENT.md # Deployment guide
 └── README.md              # This file
 ```
 
@@ -83,13 +87,17 @@ The app integrates with the existing dbt project and data sources:
   - Supply chain models
   - Customer insights models
 
+- **Production Database**: `portfolio.duckdb`
+  - Contains all processed dbt models
+  - Ready for deployment to Streamlit Cloud
+
 ## 🔧 Configuration
 
 ### Environment Variables
 Create a `.env` file in the ecometrics directory:
 ```env
 DBT_PROJECT_DIR=../dbt
-DATABASE_URL=postgresql://user:password@localhost:5432/database
+DATABASE_URL=duckdb:///portfolio.duckdb
 ```
 
 ### dbt Integration
@@ -98,29 +106,62 @@ The app is designed to work with the existing dbt project. Ensure:
 2. Database connection is established
 3. Models are compiled and tested
 
-## 🎯 Development Roadmap
+## 🚀 Deployment
 
-### Phase 1: Basic Structure ✅
-- [x] Multipage app skeleton
-- [x] Navigation setup
-- [x] Page layouts and placeholders
+### Streamlit Cloud Deployment
 
-### Phase 2: Data Integration
-- [ ] Connect to dbt models
-- [ ] Load and display raw data
-- [ ] Implement data quality checks
+1. **Prepare for deployment**:
+   ```bash
+   python prepare_for_deployment.py
+   ```
 
-### Phase 3: Analytics & Visualization
-- [ ] ESG metrics dashboard
-- [ ] Financial analysis charts
-- [ ] Supply chain optimization tools
-- [ ] Customer insights analytics
+2. **Deploy to Streamlit Cloud**:
+   - Connect your GitHub repository to Streamlit Cloud
+   - Set main file to: `ecometrics/Home.py`
+   - Set requirements file to: `ecometrics/requirements.txt`
 
-### Phase 4: Advanced Features
-- [ ] Interactive forecasting models
-- [ ] Real-time data updates
-- [ ] Custom visualization builder
-- [ ] Export and reporting tools
+3. **Verify deployment**:
+   - Check the Data Browser page for database connection
+   - Verify all dashboard pages are functional
+
+### Local Development
+
+For local development with live dbt integration:
+
+1. **Build dbt models**:
+   ```bash
+   cd ../dbt
+   dbt deps
+   dbt run
+   dbt test
+   ```
+
+2. **Update database**:
+   ```bash
+   cp ../dbt/data/processed/portfolio.duckdb .
+   ```
+
+## 📈 Current Implementation Status
+
+### ✅ Completed Features
+- **ESG Analytics**: Full sustainability metrics dashboard
+- **Financial Analysis**: Comprehensive financial reporting
+- **Supply Chain Insights**: Complete supply chain optimization
+- **Customer Insights**: Advanced customer analytics
+- **Data Browser**: Interactive dbt model exploration
+- **Forecasting**: Advanced time series forecasting
+- **Responsive Design**: Mobile-friendly interface
+- **Data Quality**: 105+ automated tests
+
+### 🎯 Key Capabilities
+- Real-time data visualization with Plotly
+- Multi-dimensional filtering and drill-down
+- Export capabilities for reports
+- Comprehensive ESG and financial metrics
+- Supply chain optimization insights
+- Customer segmentation and analysis
+- Advanced forecasting models
+- Production-ready data pipeline
 
 ## 🤝 Contributing
 

@@ -1,6 +1,6 @@
-# Enhanced Forecasting Models
+# Enhanced Forecasting Documentation
 
-This document describes the enhanced forecasting capabilities added to the PackagingCo BI Portfolio project.
+This document describes the enhanced forecasting capabilities added to the EcoMetrics BI Portfolio project.
 
 ## Overview
 

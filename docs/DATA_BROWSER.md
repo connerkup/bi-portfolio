@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Data Browser is a comprehensive data exploration tool integrated into the PackagingCo BI Portfolio dashboard. It provides interactive access to both processed and raw datasets with advanced filtering, search, and export capabilities.
+The Data Browser is a comprehensive data exploration tool integrated into the EcoMetrics BI Portfolio dashboard. It provides interactive access to both processed and raw datasets with advanced filtering, search, and export capabilities.
 
 ## Features
 

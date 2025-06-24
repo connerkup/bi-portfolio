@@ -1,6 +1,6 @@
-# Testing Guide for PackagingCo Insights
+# Testing Guide for EcoMetrics Insights
 
-This document provides a comprehensive guide to the testing implementation for the PackagingCo Insights project.
+This document provides a comprehensive guide to the testing implementation for the EcoMetrics Insights project.
 
 ## Overview
 
@@ -294,7 +294,7 @@ python -m pytest tests/ --collect-only
 
 ## Conclusion
 
-The testing suite provides comprehensive coverage of the PackagingCo Insights functionality, ensuring:
+The testing suite provides comprehensive coverage of the EcoMetrics Insights functionality, ensuring:
 
 - **Code Quality**: Reliable and maintainable code
 - **Business Logic**: Accurate calculations and analysis

@@ -8,28 +8,42 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 
 ## 📊 Features
 
-### **ESG Analytics**
+### **ESG Analytics** ✅
 - Sustainability performance tracking
 - Emissions analysis and reporting
 - Material efficiency metrics
 - Renewable energy usage monitoring
 - Water conservation analytics
 
-### **Financial Intelligence**
+### **Financial Intelligence** ✅
 - Revenue and profitability analysis
 - Cost structure optimization
 - Regional performance insights
 - Growth trend forecasting
 - Profit margin analysis
 
-### **Interactive Dashboards**
+### **Supply Chain Optimization** ✅
+- Inventory management and tracking
+- Material flow analysis
+- Operational efficiency metrics
+- Supply chain cost optimization
+- Sustainability impact assessment
+
+### **Customer Insights** ✅
+- Customer behavior analysis
+- Segmentation and profiling
+- Sustainability preferences tracking
+- Customer lifetime value analysis
+- Market opportunity identification
+
+### **Interactive Dashboards** ✅
 - Real-time data visualization
 - Multi-dimensional filtering
 - Responsive design (mobile-friendly)
 - Export capabilities
 - Drill-down analytics
 
-### **Data Pipeline**
+### **Data Pipeline** ✅
 - Robust ETL process with dbt
 - Comprehensive data testing
 - Transaction-level data processing
@@ -41,7 +55,7 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 - **Frontend**: Streamlit (Python)
 - **Data Processing**: dbt (Data Build Tool)
 - **Database**: DuckDB
-- **Analysis**: Pandas, Plotly, NumPy
+- **Analysis**: Pandas, Plotly, NumPy, Scikit-learn
 - **Testing**: Comprehensive dbt tests
 - **Deployment**: Streamlit Cloud
 
@@ -51,11 +65,17 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 📁 bi-portfolio/
 ├── 📁 dbt/                    # Data transformation layer
 │   ├── 📁 models/            # SQL models
+│   │   ├── 📁 finance/       # Financial analysis models
+│   │   ├── 📁 sustainability/ # ESG analysis models
+│   │   ├── 📁 supply_chain/  # Supply chain models
+│   │   └── 📁 customer_insights/ # Customer analysis models
 │   ├── 📁 tests/             # Data quality tests
 │   └── 📁 macros/            # Reusable SQL macros
-├── 📁 streamlit_app/         # Frontend application
-│   ├── app.py               # Main dashboard
-│   └── 📁 pages/            # Multi-page navigation
+├── 📁 ecometrics/            # Main Streamlit application
+│   ├── Home.py              # Main dashboard entry point
+│   ├── 📁 pages/            # Multi-page navigation
+│   ├── data_connector.py    # Database connection logic
+│   └── portfolio.duckdb     # Production database
 ├── 📁 src/                   # Python analysis modules
 │   └── 📁 packagingco_insights/
 └── 📁 data/                  # Raw and processed data
@@ -79,18 +99,32 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 3. **Run the data pipeline**:
    ```bash
    cd dbt
+   dbt deps
    dbt run
    dbt test
    ```
 
 4. **Start the dashboard**:
    ```bash
-   cd streamlit_app
-   streamlit run app.py
+   cd ecometrics
+   streamlit run Home.py
    ```
 
 5. **Access the application**:
    Open your browser to `http://localhost:8501`
+
+### **Deployment to Streamlit Cloud**
+
+1. **Prepare for deployment**:
+   ```bash
+   cd ecometrics
+   python prepare_for_deployment.py
+   ```
+
+2. **Deploy to Streamlit Cloud**:
+   - Connect your GitHub repository to Streamlit Cloud
+   - Set main file to: `ecometrics/Home.py`
+   - Set requirements file to: `ecometrics/requirements.txt`
 
 ## 📈 Key Metrics & Insights
 
@@ -106,6 +140,18 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 - **Profit Margins**: Gross and net profitability
 - **Cost Optimization**: Efficiency and waste reduction
 - **Market Performance**: Segment and product analysis
+
+### **Supply Chain Metrics**
+- **Inventory Turnover**: Efficiency of inventory management
+- **Material Flow**: Tracking of sustainable materials
+- **Operational Costs**: Supply chain cost analysis
+- **Sustainability Impact**: ESG metrics across supply chain
+
+### **Customer Analytics**
+- **Customer Segments**: Behavioral and demographic analysis
+- **Sustainability Preferences**: Customer ESG awareness
+- **Lifetime Value**: Customer profitability analysis
+- **Market Opportunities**: Growth potential identification
 
 ## 🎯 Business Value
 
