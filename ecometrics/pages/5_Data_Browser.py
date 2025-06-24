@@ -4,8 +4,7 @@ from data_connector import get_data_connector, check_dbt_availability
 
 st.set_page_config(
     page_title="Data Browser - EcoMetrics",
-    page_icon="📊",
-    layout="wide"
+    page_icon="📊"
 )
 
 st.title("📊 Data Browser")

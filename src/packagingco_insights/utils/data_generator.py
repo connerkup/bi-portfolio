@@ -429,7 +429,7 @@ class MockDataGenerator:
                 if bool(facility_config['sustainability_initiative']):
                     sustainability_progress += 0.2
                 
-                recycled_pct = (float(product_config['recycled_material_potential']) * 
+                recycled_pct = (float(product_config['recycled_material_potential']) * 100 * 
                               (0.6 + sustainability_progress) * random.uniform(0.8, 1.2))
                 recycled_pct = min(100, max(0, recycled_pct))
                 virgin_pct = 100 - recycled_pct

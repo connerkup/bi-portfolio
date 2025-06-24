@@ -299,15 +299,28 @@ def load_supply_chain_data() -> Tuple[pd.DataFrame, str]:
     """
     try:
         connector = get_data_connector()
+        
+        # Try to load from fact_supply_chain_monthly first
         query = """
-        SELECT * FROM stg_supply_chain_data 
+        SELECT * FROM fact_supply_chain_monthly 
         ORDER BY date DESC
         """
         df = connector.query(query)
-        return df, "Loaded from stg_supply_chain_data"
+        return df, "Loaded from fact_supply_chain_monthly"
     except Exception as e:
-        logger.error(f"Failed to load supply chain data: {e}")
-        return pd.DataFrame(), f"Error loading supply chain data: {e}"
+        logger.warning(f"Failed to load from fact_supply_chain_monthly: {e}")
+        
+        # Fallback to staging table
+        try:
+            query = """
+            SELECT * FROM stg_supply_chain_data 
+            ORDER BY date DESC
+            """
+            df = connector.query(query)
+            return df, "Loaded from stg_supply_chain_data (fallback)"
+        except Exception as e2:
+            logger.error(f"Failed to load supply chain data: {e2}")
+            return pd.DataFrame(), f"Error loading supply chain data: {e2}"
 
 
 def initialize_sample_data_if_needed():

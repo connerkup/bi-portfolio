@@ -6,7 +6,6 @@ from data_connector import check_dbt_availability
 st.set_page_config(
     page_title="EcoMetrics - Business Intelligence Portfolio",
     page_icon="🌱",
-    layout="wide",
     initial_sidebar_state="expanded"
 )
 
@@ -79,47 +78,143 @@ environmental, social, and governance (ESG) insights with financial analysis and
 col1, col2 = st.columns(2)
 
 with col1:
+    if st.button("\n🌱 ESG Insights\n\nExplore sustainability metrics, environmental impact analysis, and ESG performance tracking.\n", key="esg_card"):
+        st.switch_page("pages/1_ESG_Insights.py")
     st.markdown("""
-    <div class="feature-card">
-        <h3>🌱 ESG Insights</h3>
-        <p>Explore sustainability metrics, environmental impact analysis, and ESG performance tracking.</p>
-    </div>
+    <style>
+    div[data-testid="stButton"][key="esg_card"] button {
+        width: 100%;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #1f77b4;
+        margin-bottom: 1rem;
+        background-color: transparent;
+        color: inherit;
+        font-size: 1.1rem;
+        text-align: left;
+        transition: background 0.2s;
+    }
+    div[data-testid="stButton"][key="esg_card"] button:hover {
+        background: rgba(31, 119, 180, 0.08);
+        border-color: #45B7D1;
+    }
+    </style>
     """, unsafe_allow_html=True)
-    
+
+    if st.button("\n💰 Financial Analysis\n\nComprehensive financial forecasting, profit margin analysis, and revenue optimization.\n", key="finance_card"):
+        st.switch_page("pages/2_Financial_Analysis.py")
     st.markdown("""
-    <div class="feature-card">
-        <h3>💰 Financial Analysis</h3>
-        <p>Comprehensive financial forecasting, profit margin analysis, and revenue optimization.</p>
-    </div>
+    <style>
+    div[data-testid="stButton"][key="finance_card"] button {
+        width: 100%;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #1f77b4;
+        margin-bottom: 1rem;
+        background-color: transparent;
+        color: inherit;
+        font-size: 1.1rem;
+        text-align: left;
+        transition: background 0.2s;
+    }
+    div[data-testid="stButton"][key="finance_card"] button:hover {
+        background: rgba(31, 119, 180, 0.08);
+        border-color: #45B7D1;
+    }
+    </style>
     """, unsafe_allow_html=True)
-    
+
+    if st.button("\n🔄 Supply Chain Insights\n\nSupply chain optimization, material tracking, and operational efficiency analysis.\n", key="supply_card"):
+        st.switch_page("pages/3_Supply_Chain_Insights.py")
     st.markdown("""
-    <div class="feature-card">
-        <h3>🔄 Supply Chain Insights</h3>
-        <p>Supply chain optimization, material tracking, and operational efficiency analysis.</p>
-    </div>
+    <style>
+    div[data-testid="stButton"][key="supply_card"] button {
+        width: 100%;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #1f77b4;
+        margin-bottom: 1rem;
+        background-color: transparent;
+        color: inherit;
+        font-size: 1.1rem;
+        text-align: left;
+        transition: background 0.2s;
+    }
+    div[data-testid="stButton"][key="supply_card"] button:hover {
+        background: rgba(31, 119, 180, 0.08);
+        border-color: #45B7D1;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
 with col2:
+    if st.button("\n👥 Customer Insights\n\nCustomer behavior analysis, segmentation, and engagement metrics.\n", key="customer_card"):
+        st.switch_page("pages/4_Customer_Insights.py")
     st.markdown("""
-    <div class="feature-card">
-        <h3>👥 Customer Insights</h3>
-        <p>Customer behavior analysis, segmentation, and engagement metrics.</p>
-    </div>
+    <style>
+    div[data-testid="stButton"][key="customer_card"] button {
+        width: 100%;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #1f77b4;
+        margin-bottom: 1rem;
+        background-color: transparent;
+        color: inherit;
+        font-size: 1.1rem;
+        text-align: left;
+        transition: background 0.2s;
+    }
+    div[data-testid="stButton"][key="customer_card"] button:hover {
+        background: rgba(31, 119, 180, 0.08);
+        border-color: #45B7D1;
+    }
+    </style>
     """, unsafe_allow_html=True)
-    
+
+    if st.button("\n📊 Data Browser\n\nExplore raw data, dbt models, and perform ad-hoc analysis.\n", key="data_card"):
+        st.switch_page("pages/5_Data_Browser.py")
     st.markdown("""
-    <div class="feature-card">
-        <h3>📊 Data Browser</h3>
-        <p>Explore raw data, dbt models, and perform ad-hoc analysis.</p>
-    </div>
+    <style>
+    div[data-testid="stButton"][key="data_card"] button {
+        width: 100%;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #1f77b4;
+        margin-bottom: 1rem;
+        background-color: transparent;
+        color: inherit;
+        font-size: 1.1rem;
+        text-align: left;
+        transition: background 0.2s;
+    }
+    div[data-testid="stButton"][key="data_card"] button:hover {
+        background: rgba(31, 119, 180, 0.08);
+        border-color: #45B7D1;
+    }
+    </style>
     """, unsafe_allow_html=True)
-    
+
+    if st.button("\n📈 Forecasting\n\nAdvanced forecasting models for business planning and decision making.\n", key="forecast_card"):
+        st.switch_page("pages/6_Forecasting.py")
     st.markdown("""
-    <div class="feature-card">
-        <h3>📈 Forecasting</h3>
-        <p>Advanced forecasting models for business planning and decision making.</p>
-    </div>
+    <style>
+    div[data-testid="stButton"][key="forecast_card"] button {
+        width: 100%;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #1f77b4;
+        margin-bottom: 1rem;
+        background-color: transparent;
+        color: inherit;
+        font-size: 1.1rem;
+        text-align: left;
+        transition: background 0.2s;
+    }
+    div[data-testid="stButton"][key="forecast_card"] button:hover {
+        background: rgba(31, 119, 180, 0.08);
+        border-color: #45B7D1;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
 # Footer

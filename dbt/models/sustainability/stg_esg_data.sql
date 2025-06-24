@@ -12,7 +12,7 @@ with source as (
 staged as (
     select
         -- Primary keys and identifiers
-        date,
+        month as date,
         product_line,
         facility,
         
@@ -55,12 +55,12 @@ staged as (
         round((water_usage_liters - water_fresh_liters) / nullif(water_usage_liters, 0) * 100, 2) as water_conservation_pct,
         
         -- Date dimensions
-        extract(year from date) as year,
-        extract(month from date) as month,
-        extract(quarter from date) as quarter,
-        date_trunc('month', date) as month_start,
-        date_trunc('quarter', date) as quarter_start,
-        date_trunc('year', date) as year_start,
+        extract(year from month) as year,
+        extract(month from month) as month_num,
+        extract(quarter from month) as quarter,
+        date_trunc('month', month) as month_start,
+        date_trunc('quarter', month) as quarter_start,
+        date_trunc('year', month) as year_start,
         
         -- Business logic flags
         case 
