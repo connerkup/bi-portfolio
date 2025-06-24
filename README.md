@@ -4,7 +4,7 @@ A comprehensive business intelligence platform for Environmental, Social, and Go
 
 ## 🚀 Live Demo
 
-**[EcoMetrics Dashboard](https://your-app-url.streamlit.app)** *(Coming soon after deployment)*
+**[EcoMetrics Dashboard](https://ecometrics.streamlit.app)**
 
 ## 📊 Features
 
